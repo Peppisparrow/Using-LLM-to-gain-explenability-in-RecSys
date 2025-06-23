@@ -1,7 +1,7 @@
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from title import *
-import polars as pl
+from polars import pl
 from tqdm import tqdm
 # 1. Caricamento del Modello e del Tokenizer
 # Usiamo un modello della famiglia Mistral.
@@ -23,13 +23,10 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 # I modelli "Instruct" funzionano meglio con un template specifico.
 # Per Mistral, il template è [INST] ... [/INST].
 #input_prompt = generate_user_taste_prompt(10127955)
-user = pl.read_csv("Dataset/steam/users.csv")
+user = pl.read_csv("Dataset/steam/user.csv")
 user_ids = user["user_id"].to_list()
-output_dict = {}
-
 for user_id in tqdm(user_ids, desc="Analizzando i profili utente"):
-    #input_prompt = generate_user_taste_prompt(user_id)
-    input_prompt = "Le rose sono rosse, le viole sono blu, il cielo è azzurro e io amo i videogiochi."
+    input_prompt = generate_user_taste_prompt(user_id)
     formatted_prompt = f"[INST] {input_prompt} [/INST]"
 
     input_ids = tokenizer(formatted_prompt, return_tensors="pt").input_ids.to(model.device)
@@ -45,22 +42,24 @@ for user_id in tqdm(user_ids, desc="Analizzando i profili utente"):
     generated_ids = output_sequences[0, input_ids.shape[-1]:]
     generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
 
+    print(f"Prompt di Input: '{input_prompt}'")
+    print(f"Testo Generato: '{generated_text}'")
+    print(f"Testo Generato: '{generated_text.strip()}'")
+    print("-" * 25)
+
+
+    print("\n--- Estrazione dell'Hidden State ---")
     with torch.no_grad():
         model_output = model(
             input_ids=input_ids,
             output_hidden_states=True # Parametro FONDAMENTALE
         )
     all_hidden_states = model_output.hidden_states
+    print(f"URCAAA!!!Numero di hidden states estratti: {len(all_hidden_states)}")
+
     last_hidden_state = all_hidden_states[-1]
+    print(f"Numero di layer nel modello: {len(all_hidden_states)}")
+    print(f"Dimensioni dell'ultimo hidden state (output del prompt): {last_hidden_state.shape}")
+    print(f"Tipo di tensore: {last_hidden_state}")
     embedding_mean_pooling = last_hidden_state.mean(dim=1)
-    output_dict['user_id'] = {
-        "input_prompt": input_prompt,
-        "generated_text": generated_text.strip(),
-        "embedding_mean_pooling": embedding_mean_pooling # Converti in lista per serializzazione
-    }
-
-# Save as pickle with highest protocol
-import pickle
-with open("user_embeddings.pkl", "wb") as f:
-    pickle.dump(output_dict, f, protocol=pickle.HIGHEST_PROTOCOL)
-
+    print(f"Dimensioni dell'output dopo mean pooling: {embedding_mean_pooling.shape}")

@@ -193,3 +193,5 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 .idea
+*.jsonl
+*.arrow
