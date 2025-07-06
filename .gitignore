@@ -203,3 +203,4 @@ cython_debug/
 *.pkl
 *.parquet
 *.np*
+*venv*
