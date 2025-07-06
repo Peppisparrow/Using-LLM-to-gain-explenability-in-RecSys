@@ -1,43 +1,19 @@
-"""
-Created on 23/03/2019
-
-@author: Maurizio Ferrari Dacrema
-"""
-
-
-
 from RecSysFramework.Recommenders.BaseMatrixFactorizationRecommender import BaseMatrixFactorizationRecommender
 from RecSysFramework.Recommenders.Incremental_Training_Early_Stopping import Incremental_Training_Early_Stopping
 from RecSysFramework.Recommenders.Recommender_utils import check_matrix
 import numpy as np
 
 
-class ItemLSRecommender(BaseMatrixFactorizationRecommender, Incremental_Training_Early_Stopping):
-    """
-    MOFIFICATION OF THE IALSRecommender Class to only find item matrix factors, not user matrix factors
-    Binary/Implicit Alternating Least Squares (IALS)
-    See:
-    Y. Hu, Y. Koren and C. Volinsky, Collaborative filtering for implicit feedback datasets, ICDM 2008.
-    http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.167.5120&rep=rep1&type=pdf
+class RecommenderDecoder(BaseMatrixFactorizationRecommender, Incremental_Training_Early_Stopping):
 
-    R. Pan et al., One-class collaborative filtering, ICDM 2008.
-    http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.306.4684&rep=rep1&type=pdf
-
-    Factorization model for binary feedback.
-    First, splits the feedback matrix R as the element-wise a Preference matrix P and a Confidence matrix C.
-    Then computes the decomposition of them into the dot product of two matrices X and Y of latent factors.
-    X represent the user latent factors, Y the item latent factors.
-
-    The model is learned by solving the following regularized Least-squares objective function with Stochastic Gradient Descent
-    \operatornamewithlimits{argmin}\limits_{x*,y*}\frac{1}{2}\sum_{i,j}{c_{ij}(p_{ij}-x_i^T y_j) + \lambda(\sum_{i}{||x_i||^2} + \sum_{j}{||y_j||^2})}
-    """
-
-    RECOMMENDER_NAME = "ItemLSRecommender"
+    RECOMMENDER_NAME = "RecommenderDecoder"
 
     AVAILABLE_CONFIDENCE_SCALING = ["linear", "log"]
 
 
-    def fit(self, epochs = 300,
+    def fit(self,
+            user_factors,
+            epochs = 300,
             num_factors = 20,
             confidence_scaling = "linear",
             alpha = 1.0,
@@ -68,7 +44,7 @@ class ItemLSRecommender(BaseMatrixFactorizationRecommender, Incremental_Training
         self.epsilon = epsilon
         self.reg = reg
 
-        self.USER_factors = self._init_factors(self.n_users, False)  # don't need values, will compute them
+        self.USER_factors = user_factors
         self.ITEM_factors = self._init_factors(self.n_items)
 
 
@@ -106,8 +82,6 @@ class ItemLSRecommender(BaseMatrixFactorizationRecommender, Incremental_Training
         self.C_csc= check_matrix(self.C.copy(), format="csc", dtype = np.float32)
 
 
-
-
     def _linear_scaling_confidence(self):
 
         C = check_matrix(self.URM_train, format="csr", dtype = np.float32)
@@ -123,8 +97,6 @@ class ItemLSRecommender(BaseMatrixFactorizationRecommender, Incremental_Training
         return C
 
 
-
-
     def _prepare_model_for_validation(self):
         pass
 
@@ -135,24 +107,6 @@ class ItemLSRecommender(BaseMatrixFactorizationRecommender, Incremental_Training
 
 
     def _run_epoch(self, num_epoch):
-
-        # fit user factors
-        # VV = n_factors x n_factors
-        VV = self.ITEM_factors.T.dot(self.ITEM_factors)
-
-        # for user_id in self.warm_users:
-        #     # get (positive i.e. non-zero scored) items for user
-
-        #     start_pos = self.C.indptr[user_id]
-        #     end_pos = self.C.indptr[user_id + 1]
-
-        #     user_profile = self.C.indices[start_pos:end_pos]
-        #     user_confidence = self.C.data[start_pos:end_pos]
-
-        #     self.USER_factors[user_id, :] = self._update_row(user_profile, user_confidence, self.ITEM_factors, VV)
-
-        # fit item factors
-        # UU = n_factors x n_factors
         UU = self.USER_factors.T.dot(self.USER_factors)
 
         for item_id in self.warm_items:

@@ -197,3 +197,9 @@ cython_debug/
 .idea
 *.jsonl
 *.arrow
+.DS_Store
+*.db
+*.csv
+*.pkl
+*.parquet
+*.np*
