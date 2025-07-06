@@ -79,10 +79,14 @@ class ReviewDataset(Dataset):
         self.response_length = args.task.response_length
 
         # load dataset
-        with open(os.path.join('./data', data_dir, 'train_test_sessions.pkl'), "rb") as f:
+        with open(os.path.join('.', data_dir, 'train_test_sessions.pkl'), "rb") as f:
             train_sess, train_rating, test_sess, test_rating = pickle.load(f)
-        with open(os.path.join('./data', data_dir, 'item_data.pkl'), "rb") as f:
+        with open(os.path.join('', data_dir, 'item_data.pkl'), "rb") as f:
             item_data = pickle.load(f)
+        # with open(os.path.join('./data', data_dir, 'train_test_sessions.pkl'), "rb") as f:
+        #     train_sess, train_rating, test_sess, test_rating = pickle.load(f)
+        # with open(os.path.join('./data', data_dir, 'item_data.pkl'), "rb") as f:
+        #     item_data = pickle.load(f)
 
         # prep dataset
         if split == "train":

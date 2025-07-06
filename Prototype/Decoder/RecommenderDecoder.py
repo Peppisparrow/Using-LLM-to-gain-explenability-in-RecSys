@@ -2,6 +2,7 @@ from RecSysFramework.Recommenders.BaseMatrixFactorizationRecommender import Base
 from RecSysFramework.Recommenders.Incremental_Training_Early_Stopping import Incremental_Training_Early_Stopping
 from RecSysFramework.Recommenders.Recommender_utils import check_matrix
 import numpy as np
+from tqdm import tqdm
 
 
 class RecommenderDecoder(BaseMatrixFactorizationRecommender, Incremental_Training_Early_Stopping):
@@ -107,9 +108,10 @@ class RecommenderDecoder(BaseMatrixFactorizationRecommender, Incremental_Trainin
 
 
     def _run_epoch(self, num_epoch):
+        print("Run epoch {}".format(num_epoch))
         UU = self.USER_factors.T.dot(self.USER_factors)
-
-        for item_id in self.warm_items:
+        print("UU shape: {}".format(UU.shape))
+        for _, item_id in tqdm(enumerate(self.warm_items), total=len(self.warm_items), desc="Updating item factors"):
 
             start_pos = self.C_csc.indptr[item_id]
             end_pos = self.C_csc.indptr[item_id + 1]
