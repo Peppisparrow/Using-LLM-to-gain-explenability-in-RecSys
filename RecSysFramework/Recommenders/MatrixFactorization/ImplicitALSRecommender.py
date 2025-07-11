@@ -6,7 +6,10 @@ It is a wrapper of the implicit recommender (https://github.com/benfred/implicit
 
 
 import implicit
+import numpy as np
+
 from RecSysFramework.Recommenders.BaseMatrixFactorizationRecommender import BaseMatrixFactorizationRecommender
+from RecSysFramework.Recommenders.Recommender_utils import check_matrix
 
 class ImplicitALSRecommender(BaseMatrixFactorizationRecommender):
     """ImplicitALSRecommender recommender"""
@@ -22,6 +25,39 @@ class ImplicitALSRecommender(BaseMatrixFactorizationRecommender):
         self.ITEM_factors = None
 
     RECOMMENDER_NAME = "ImplicitALSRecommender"
+    
+    def _linear_scaling_confidence(self, alpha=1.0):
+
+        C = check_matrix(self.URM_train, format="csr", dtype = np.float32)
+        C.data = 1.0 + alpha*C.data
+
+        return C
+
+    def _log_scaling_confidence(self, alpha=1.0, epsilon=1e-6):
+
+        C = check_matrix(self.URM_train, format="csr", dtype = np.float32)
+        C.data = 1.0 + alpha * np.log(1.0 + C.data / epsilon)
+
+        return C
+    
+    def _confidence_scaling(self, alpha=1.0, confidence_scaling='linear'):
+        """
+        Scales the confidence of the interactions in the URM_train matrix.
+        
+        Parameters:
+        - alpha: Scaling factor for the confidence.
+        - confidence_scaling: Type of scaling to apply ('linear' or 'log').
+        - **confidence_args: Additional arguments for confidence scaling.
+        
+        Returns:
+        - C: Scaled confidence matrix.
+        """
+        if confidence_scaling == 'linear':
+            return self._linear_scaling_confidence(alpha)
+        elif confidence_scaling == 'log':
+            return self._log_scaling_confidence(alpha, epsilon=1)
+        else:
+            raise ValueError("Invalid confidence scaling method. Use 'linear' or 'log'.")
 
     def fit(self,
             factors=100,
@@ -29,7 +65,7 @@ class ImplicitALSRecommender(BaseMatrixFactorizationRecommender):
             use_native=True, use_cg=True, use_gpu=False,
             iterations=15,
             calculate_training_loss=False, num_threads=0,
-            alpha=1.0,
+            **confidence_args
             ):
         
         print("Implicit cuda support: ", implicit.gpu.HAS_CUDA)
@@ -43,11 +79,12 @@ class ImplicitALSRecommender(BaseMatrixFactorizationRecommender):
                                                         iterations=iterations,
                                                         calculate_training_loss=calculate_training_loss,
                                                         num_threads=num_threads,
-                                                        alpha=alpha,
                                                         random_state=42
                                                         )
 
-        self.model.fit(self.URM_train, show_progress=self.verbose)
+        C = self._confidence_scaling(**confidence_args)
+        
+        self.model.fit(C, show_progress=self.verbose)
 
         if use_gpu:
             # Convert the user and item factors to numpy arrays if using GPU
