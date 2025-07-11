@@ -7,9 +7,9 @@ import scipy.sparse as sps
 from pathlib import Path
 
 class DataManger:
-    def __init__(self, data_path: Path = Path('Prototype/data')):
+    def __init__(self, user_embedding_path: Path, data_path: Path = Path('Prototype/data')):
         self.data_path = data_path
-        self.URM_train, self.URM_test, self.user_embeddings = self.load_data()
+        self.URM_train, self.URM_test, self.user_embeddings = self.load_data(user_embedding_path, data_path)
         
     def get_URM_train(self):
         """
@@ -29,19 +29,19 @@ class DataManger:
         """
         return self.user_embeddings
 
-    def load_data(self, data_path: Path = Path('Prototype/data')):
+    def load_data(self,
+                  user_embeddings_path: Path,
+                  data_path: Path):
         """
         Loads URM_train, URM_test and user embeddings
         """
 
         train_path = data_path / 'train_recommendations.csv'
         test_path = data_path / 'test_recommendations.csv'
-        user_embeddings_path = data_path / 'user_embeddings_compressed.npz'
 
 
         train_data = pd.read_csv(train_path)[['user_id', 'app_id']]
         test_data = pd.read_csv(test_path)[['user_id', 'app_id']]
-
 
         x = np.load(user_embeddings_path)
         user_embeddings = x['embeddings']
@@ -66,8 +66,6 @@ class DataManger:
         # Mapping user_ids and review_ids to indices
         user_id_to_index = {user_id: index for index, user_id in enumerate(user_ids)}
         item_id_to_index = {review_id: index for index, review_id in enumerate(unique_item_ids)}
-
-        user_id_to_index
 
         train_data['user_id'] = train_data['user_id'].map(user_id_to_index)
         train_data['review_id'] = train_data['app_id'].map(item_id_to_index)

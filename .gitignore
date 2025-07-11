@@ -204,4 +204,8 @@ cython_debug/
 *.pkl
 *.parquet
 *.np*
-*venv*
+*env*
+*.out
+*.err
+*.csv
+*.sh
