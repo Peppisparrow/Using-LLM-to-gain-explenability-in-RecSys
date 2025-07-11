@@ -13,7 +13,7 @@ from RecSysFramework.Evaluation.Evaluator import EvaluatorHoldout
 
 
 # ---------- CONSTANTS ----------
-METRIC = 'map'
+METRIC = 'MAP_MIN_DEN'
 METRIC_K = 10
 BASE_OPTUNA_FOLDER = Path("Prototype/optuna/")
 STUDY_NAME = "2Tower_prova"
