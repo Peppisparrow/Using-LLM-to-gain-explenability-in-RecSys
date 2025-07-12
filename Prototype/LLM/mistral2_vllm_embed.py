@@ -6,7 +6,7 @@ import numpy as np
 
 # --- 1. Caricamento Dati ---
 # Carica i risultati dal primo script per sapere per quali prompt calcolare gli embedding
-data_dir = "Dataset/steam/filtering_no_desc_giappo_corean_k10"
+data_dir = "Dataset/steam/filtering_no_desc_giappo_corean_k10/small"
 results_path = f"{data_dir}/user_results_final.pkl" # Assicurati che il percorso sia corretto
 print(f"🔄 Caricando i risultati da '{results_path}'...")
 try:

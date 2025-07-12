@@ -7,7 +7,7 @@ import numpy as np
 
 # --- 1. Caricamento Dati ---
 # The data loading part remains the same.
-data_dir = "Dataset/steam/filtering_no_desc_giappo_corean_k10"
+data_dir = "Dataset/steam/filtering_no_desc_giappo_corean_k10/mid"
 results_path = f"{data_dir}/user_results_final.pkl"
 print(f"🔄 Loading results from '{results_path}'...")
 try:

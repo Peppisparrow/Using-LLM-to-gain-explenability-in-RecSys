@@ -13,12 +13,14 @@ def create_llm_engine(model_path, num_gpus):
         dtype='bfloat16',
         trust_remote_code=True,
         tensor_parallel_size=num_gpus,
+        gpu_memory_utilization=0.8,  # Usa il 90% della memoria GPU
+        enforce_eager=True,
         # Aggiungi un timeout per la comunicazione tra worker
     )
     print("✅ Motore vLLM creato con successo.")
     return llm
 # --- 1. Caricamento Dati (invariato) ---
-data_dir = "Dataset/steam/filtering_no_desc_giappo_corean_k10"
+data_dir = "Dataset/steam/filtering_no_desc_giappo_corean_k10/small"
 user = pl.read_csv(f"{data_dir}/users.csv")
 user_ids = user["user_id"].to_list()
 with open(f'{data_dir}/user_prompts.json', 'r') as f:
@@ -41,35 +43,35 @@ all_prompts = []
 # Lasciamo spazio per la risposta (150 token) e un margine di sicurezza.
 MAX_PROMPT_LEN = 1024 # Un limite ragionevole per un profilo utente
 
-# print(f"Preparing and truncating prompts to a max length of {MAX_PROMPT_LEN} tokens...")
-# for user_id in tqdm(user_ids, desc="Processing prompts"):
-#     prompt = user_taste_prompts.get(str(user_id))
-#     if prompt:
-#         end_string = (
-#             f"\n\n---END OF DATA---\n\n"
-#             f"Based on the data above, provide a summary of this user's tastes:"
-#         )
-#         end_tokens = tokenizer.encode(end_string)
-#         input_ids = tokenizer.encode(prompt)
-#         if len(input_ids) > MAX_PROMPT_LEN:
-#             max_prompt_tokens = MAX_PROMPT_LEN - len(end_tokens)
-#             truncated_ids = input_ids[:max_prompt_tokens]
-#             final_ids = truncated_ids + end_tokens   
-#         else:
-#             final_ids = input_ids
-#         final_prompt_text = tokenizer.decode(final_ids, skip_special_tokens=True)
-#         formatted_prompt = f"[INST] {final_prompt_text} [/INST]"
-#         all_prompts.append(formatted_prompt)
-#         valid_users_data.append({"user_id": str(user_id), "input_prompt": final_prompt_text})
+print(f"Preparing and truncating prompts to a max length of {MAX_PROMPT_LEN} tokens...")
+for user_id in tqdm(user_ids, desc="Processing prompts"):
+    prompt = user_taste_prompts.get(str(user_id))
+    if prompt:
+        end_string = (
+            f"\n\n---END OF DATA---\n\n"
+            f"Based on the data above, provide a summary of this user's tastes:"
+        )
+        end_tokens = tokenizer.encode(end_string)
+        input_ids = tokenizer.encode(prompt)
+        if len(input_ids) > MAX_PROMPT_LEN:
+            max_prompt_tokens = MAX_PROMPT_LEN - len(end_tokens)
+            truncated_ids = input_ids[:max_prompt_tokens]
+            final_ids = truncated_ids + end_tokens   
+        else:
+            final_ids = input_ids
+        final_prompt_text = tokenizer.decode(final_ids, skip_special_tokens=True)
+        formatted_prompt = f"[INST] {final_prompt_text} [/INST]"
+        all_prompts.append(formatted_prompt)
+        valid_users_data.append({"user_id": str(user_id), "input_prompt": final_prompt_text})
 
-# preprocessed_data_path = f"{data_dir}/preprocessed_prompts.json"
-# print(f"💾 Salvataggio dati in '{preprocessed_data_path}' per uso futuro...")
-# with open(preprocessed_data_path, 'w', encoding='utf-8') as f:
-#     json.dump({
-#         "all_prompts": all_prompts,
-#         "valid_users_data": valid_users_data
-#     }, f, ensure_ascii=False, indent=4) # 'indent=4' lo rende leggibile
-# print("Salvataggio completato.")
+preprocessed_data_path = f"{data_dir}/preprocessed_prompts.json"
+print(f"💾 Salvataggio dati in '{preprocessed_data_path}' per uso futuro...")
+with open(preprocessed_data_path, 'w', encoding='utf-8') as f:
+    json.dump({
+        "all_prompts": all_prompts,
+        "valid_users_data": valid_users_data
+    }, f, ensure_ascii=False, indent=4) # 'indent=4' lo rende leggibile
+print("Salvataggio completato.")
 
 
 preprocessed_data_path = f"{data_dir}/preprocessed_prompts.json"

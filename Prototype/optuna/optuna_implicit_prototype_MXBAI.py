@@ -18,7 +18,7 @@ METRIC = 'map'
 METRIC_K = 10
 BASE_OPTUNA_FOLDER = Path("Prototype/optuna/")
 STUDY_NAME = "implicit_prototype_MAP_MXBAI"
-DATA_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/big')
+DATA_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/small')
 USER_EMBEDDING_PATH = Path('/leonardo_work/IscrC_DMG4RS/embednbreakfast/Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/user_embeddings_compressed_mxbai.npz')
 # ---------- /CONSTANTS ----------
 

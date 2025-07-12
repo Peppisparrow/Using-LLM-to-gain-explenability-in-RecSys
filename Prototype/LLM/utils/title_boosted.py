@@ -5,7 +5,7 @@ from tqdm import tqdm # Per le barre di progresso
 
 # --- PERCORSI DEI FILE ---
 # Mantieni i percorsi dei tuoi dataset qui
-data_dir = 'Dataset/steam/filtering_no_desc_giappo_corean_k10'  # Cartella base per i dataset
+data_dir = 'Dataset/steam/filtering_no_desc_giappo_corean_k10/small'  # Cartella base per i dataset
 METADATA_PATH = 'Dataset/steam/games_metadata.json'
 RECOMMENDATIONS_PATH = f'{data_dir}/train_recommendations.csv'
 GAMES_PATH = f'{data_dir}/games.csv'

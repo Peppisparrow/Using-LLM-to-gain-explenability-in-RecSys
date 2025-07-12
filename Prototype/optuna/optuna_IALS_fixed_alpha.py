@@ -17,8 +17,8 @@ METRIC = 'map'
 METRIC_K = 10
 BASE_OPTUNA_FOLDER = Path("Prototype/optuna/")
 STUDY_NAME = "IALS_STUDY_FIXED_ALPHA_MAP"
-DATA_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/big')
-USER_EMBEDDING_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/big/user_embeddings_compressed.npz')
+DATA_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/small')
+USER_EMBEDDING_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/small/user_embeddings_compressed.npz')
 # ---------- /CONSTANTS ----------
 
 def objective_function(trial, URM_train, URM_test):
