@@ -6,7 +6,7 @@ import math
 from tqdm import tqdm
 # import torch.profiler # <-- 1. Importa il profiler
 
-class DeepLearningRecommender(nn.Module, BaseRecommender):
+class DeepLearningRecommenderPrototype(nn.Module, BaseRecommender):
 
     def __init__(self, URM_train, verbose=True):
         super().__init__()
@@ -18,6 +18,8 @@ class DeepLearningRecommender(nn.Module, BaseRecommender):
             self.device = torch.device("mps")
         else:
             self.device = torch.device("cpu")
+        self.user_embeddings = None
+        self.item_embeddings = None
 
     def _data_generator_fixed(self, batch_size, num_negatives=1, num_items=None):
         """
@@ -58,15 +60,17 @@ class DeepLearningRecommender(nn.Module, BaseRecommender):
             labels_tensor = labels_tensor.reshape((-1, 1))
             yield user_tensor, item_tensor, labels_tensor
         
-    def forward(self, user_input, item_input=None, user_embedding=None, item_embedding=None):
+    def forward(self, user_input, item_input=None, user_embeddings=None, item_embeddings=None):
         raise NotImplementedError("Forward function not implemented.")
-
-
+    
     def fit(self, epochs=30, batch_size=1024, optimizer=None, user_embeddings=None, item_embeddings=None):
         # If pre-computed embeddings are passed, ensure they are tensors on the correct device
         if user_embeddings is not None:
+            self.user_embeddings = user_embeddings
             user_embeddings = torch.tensor(user_embeddings, dtype=torch.float32, device=self.device)
+            
         if item_embeddings is not None:
+            self.item_embeddings = item_embeddings
             item_embeddings = torch.tensor(item_embeddings, dtype=torch.float32, device=self.device)
 
         if optimizer is None:
@@ -93,14 +97,13 @@ class DeepLearningRecommender(nn.Module, BaseRecommender):
                 if hasattr(self, 'mlp_embedding_user') and self.mlp_embedding_user is not None:
                     forward_args['user_input'] = user_input_ids
                 else:
-                    forward_args['user_embedding'] = user_embeddings[user_input_ids]
+                    forward_args['user_embeddings'] = user_embeddings[user_input_ids]
 
                 if hasattr(self, 'mlp_embedding_item') and self.mlp_embedding_item is not None:
                     forward_args['item_input'] = item_input_ids
                 else:
-                    forward_args['item_embedding'] = item_embeddings[item_input_ids]
+                    forward_args['item_embeddings'] = item_embeddings[item_input_ids]
                 # --- END MODIFIED LOGIC ---
-
                 predictions = self.forward(**forward_args)
                 
                 loss_fn = torch.nn.BCELoss()
@@ -113,13 +116,13 @@ class DeepLearningRecommender(nn.Module, BaseRecommender):
                 
             self._print(f"Epoch {i+1}/{epochs} finished. Last batch Loss: {loss.item():.4f}\n")
 
-    def _compute_item_score(self, user_id_array, items_to_compute=None, batch_size=4096, user_embeddings=None, item_embeddings=None):
+    def _compute_item_score(self, user_id_array, items_to_compute=None, batch_size=4096):
         
         # If pre-computed embeddings are passed, ensure they are tensors on the correct device
-        if user_embeddings is not None:
-            user_embeddings = torch.tensor(user_embeddings, dtype=torch.float32, device=self.device)
-        if item_embeddings is not None:
-            item_embeddings = torch.tensor(item_embeddings, dtype=torch.float32, device=self.device)
+        if self.user_embeddings is not None:
+            user_embeddings = torch.tensor(self.user_embeddings, dtype=torch.float32, device=self.device)
+        if self.item_embeddings is not None:
+            item_embeddings = torch.tensor(self.item_embeddings, dtype=torch.float32, device=self.device)
 
         if items_to_compute is None:
             items_to_compute = np.arange(self.URM_train.shape[1])
@@ -153,7 +156,7 @@ class DeepLearningRecommender(nn.Module, BaseRecommender):
                 if hasattr(self, 'mlp_embedding_user') and self.mlp_embedding_user is not None:
                     forward_args['user_input'] = user_input_batch_gpu
                 else:
-                    forward_args['user_embedding'] = user_input_batch_gpu
+                    forward_args['user_embeddings'] = user_input_batch_gpu
 
                 if hasattr(self, 'mlp_embedding_item') and self.mlp_embedding_item is not None:
                     # Tile item IDs for each user
@@ -161,7 +164,7 @@ class DeepLearningRecommender(nn.Module, BaseRecommender):
                 else:
                     # If using pre-computed embeddings, look them up and then tile
                     item_embeddings_batch = item_embeddings[item_batch_ids_gpu]
-                    forward_args['item_embedding'] = item_embeddings_batch.repeat(num_users, 1)
+                    forward_args['item_embeddings'] = item_embeddings_batch.repeat(num_users, 1)
                 # --- END MODIFIED LOGIC ---
 
                 predictions_batch = self.forward(**forward_args)
@@ -212,80 +215,80 @@ class DeepLearningRecommender(nn.Module, BaseRecommender):
 
 
 
-    def fit(self, epochs=30, batch_size=1024, optimizer=None):
-        if optimizer is None:
-            optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
+    # def fit(self, epochs=30, batch_size=1024, optimizer=None):
+    #     if optimizer is None:
+    #         optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
     
-        # 1. Calcola il numero totale di batch per la barra di avanzamento
-        #    self.URM_train.nnz è il numero totale di interazioni positive
-        num_batches = math.ceil(self.URM_train.nnz / batch_size)
+    #     # 1. Calcola il numero totale di batch per la barra di avanzamento
+    #     #    self.URM_train.nnz è il numero totale di interazioni positive
+    #     num_batches = math.ceil(self.URM_train.nnz / batch_size)
 
-        for i in range(epochs):
-            self._print(f"Epoch {i+1}/{epochs} start")
+    #     for i in range(epochs):
+    #         self._print(f"Epoch {i+1}/{epochs} start")
             
-            # Chiama il generatore (assumendo che usi la versione corretta _data_generator_fixed)
-            data_generator = self._data_generator_fixed(batch_size) 
+    #         # Chiama il generatore (assumendo che usi la versione corretta _data_generator_fixed)
+    #         data_generator = self._data_generator_fixed(batch_size) 
             
-            # 2. Crea la barra di avanzamento con tqdm
-            progress_bar = tqdm(
-                iterable=data_generator, 
-                total=num_batches,
-                desc=f"Epoch {i+1}/{epochs}"
-            )
+    #         # 2. Crea la barra di avanzamento con tqdm
+    #         progress_bar = tqdm(
+    #             iterable=data_generator, 
+    #             total=num_batches,
+    #             desc=f"Epoch {i+1}/{epochs}"
+    #         )
             
-            # 3. Itera usando la progress_bar
-            for user_input, item_input, labels in progress_bar:
-                optimizer.zero_grad()
-                predictions = self.forward(user_input, item_input)
+    #         # 3. Itera usando la progress_bar
+    #         for user_input, item_input, labels in progress_bar:
+    #             optimizer.zero_grad()
+    #             predictions = self.forward(user_input, item_input)
                 
-                loss_fn = torch.nn.BCELoss()
-                loss = loss_fn(predictions, labels)
+    #             loss_fn = torch.nn.BCELoss()
+    #             loss = loss_fn(predictions, labels)
                 
-                loss.backward()
-                optimizer.step()
+    #             loss.backward()
+    #             optimizer.step()
 
-                # 4. (Opzionale ma utile) Aggiorna la barra con la loss corrente
-                progress_bar.set_postfix({"loss": f"{loss.item():.4f}"})
+    #             # 4. (Opzionale ma utile) Aggiorna la barra con la loss corrente
+    #             progress_bar.set_postfix({"loss": f"{loss.item():.4f}"})
                 
-            self._print(f"Epoch {i+1}/{epochs} finished. Last batch Loss: {loss.item():.4f}\n")
+    #         self._print(f"Epoch {i+1}/{epochs} finished. Last batch Loss: {loss.item():.4f}\n")
 
-    def _compute_item_score(self, user_id_array, items_to_compute=None, batch_size=4096):
-        """
-        Versione ultra-ottimizzata che esegue il pairing utente-item direttamente su GPU.
-        """
-        if items_to_compute is None:
-            items_to_compute = np.arange(self.URM_train.shape[1])
+    # def _compute_item_score(self, user_id_array, items_to_compute=None, batch_size=4096):
+    #     """
+    #     Versione ultra-ottimizzata che esegue il pairing utente-item direttamente su GPU.
+    #     """
+    #     if items_to_compute is None:
+    #         items_to_compute = np.arange(self.URM_train.shape[1])
 
-        num_users = len(user_id_array)
-        num_items = len(items_to_compute)
+    #     num_users = len(user_id_array)
+    #     num_items = len(items_to_compute)
         
-        predictions_list = []
+    #     predictions_list = []
 
-        # 1. Sposta i tensori di base sulla GPU UNA SOLA VOLTA all'inizio
-        user_tensor_gpu = torch.tensor(user_id_array, dtype=torch.long, device=self.device)
-        items_to_compute_gpu = torch.tensor(items_to_compute, dtype=torch.long, device=self.device)
+    #     # 1. Sposta i tensori di base sulla GPU UNA SOLA VOLTA all'inizio
+    #     user_tensor_gpu = torch.tensor(user_id_array, dtype=torch.long, device=self.device)
+    #     items_to_compute_gpu = torch.tensor(items_to_compute, dtype=torch.long, device=self.device)
 
-        with torch.no_grad():
-            for start_pos in range(0, num_items, batch_size):
-                end_pos = min(start_pos + batch_size, num_items)
+    #     with torch.no_grad():
+    #         for start_pos in range(0, num_items, batch_size):
+    #             end_pos = min(start_pos + batch_size, num_items)
                 
-                # Seleziona il batch di item (già sulla GPU)
-                item_batch_gpu = items_to_compute_gpu[start_pos:end_pos]
-                num_item_batch = len(item_batch_gpu)
+    #             # Seleziona il batch di item (già sulla GPU)
+    #             item_batch_gpu = items_to_compute_gpu[start_pos:end_pos]
+    #             num_item_batch = len(item_batch_gpu)
 
-                # 2. Esegui il pairing (repeat/tile) direttamente su GPU
-                #    Usa le funzioni PyTorch equivalenti a quelle NumPy
-                user_input_batch_gpu = user_tensor_gpu.repeat_interleave(num_item_batch)
-                item_input_batch_gpu = item_batch_gpu.tile(num_users)
+    #             # 2. Esegui il pairing (repeat/tile) direttamente su GPU
+    #             #    Usa le funzioni PyTorch equivalenti a quelle NumPy
+    #             user_input_batch_gpu = user_tensor_gpu.repeat_interleave(num_item_batch)
+    #             item_input_batch_gpu = item_batch_gpu.tile(num_users)
 
-                # 3. I tensori sono già sulla GPU, esegui il forward pass
-                predictions_batch = self.forward(user_input_batch_gpu, item_input_batch_gpu)
+    #             # 3. I tensori sono già sulla GPU, esegui il forward pass
+    #             predictions_batch = self.forward(user_input_batch_gpu, item_input_batch_gpu)
 
-                # 4. Sposta il risultato sulla CPU solo alla fine
-                predictions_list.append(predictions_batch.cpu().numpy().reshape(num_users, -1))
+    #             # 4. Sposta il risultato sulla CPU solo alla fine
+    #             predictions_list.append(predictions_batch.cpu().numpy().reshape(num_users, -1))
 
-        # 5. Concatena i risultati
-        final_predictions = np.concatenate(predictions_list, axis=1)
+    #     # 5. Concatena i risultati
+    #     final_predictions = np.concatenate(predictions_list, axis=1)
 
-        return final_predictions
+    #     return final_predictions
     

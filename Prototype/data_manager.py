@@ -7,9 +7,9 @@ import scipy.sparse as sps
 from pathlib import Path
 
 class DataManger:
-    def __init__(self, user_embedding_path: Path, data_path: Path = Path('Prototype/data')):
+    def __init__(self, user_embedding_path: Path, data_path: Path = Path('Prototype/data'), item_embeddings_path: Path = None):
         self.data_path = data_path
-        self.URM_train, self.URM_test, self.user_embeddings = self.load_data(user_embedding_path, data_path)
+        self.URM_train, self.URM_test, self.user_embeddings, self.item_embeddings = self.load_data(user_embedding_path, data_path, item_embeddings_path)
         
     def get_URM_train(self):
         """
@@ -29,6 +29,10 @@ class DataManger:
         """
         return self.user_embeddings
     
+    def get_item_embeddings(self):
+        """Returns the item embeddings, if loaded."""
+        return self.item_embeddings
+    
     def get_user_mapping(self):
         """
         Returns a mapping of user IDs to indices.
@@ -43,7 +47,7 @@ class DataManger:
 
     def load_data(self,
                   user_embeddings_path: Path,
-                  data_path: Path):
+                  data_path: Path, item_embeddings_path: Path = None):
         """
         Loads URM_train, URM_test and user embeddings
         """
@@ -58,7 +62,6 @@ class DataManger:
         x = np.load(user_embeddings_path)
         user_embeddings = x['embeddings']
         user_ids = x['user_ids']
-
         # Since user_ids are stored as strings, we need to convert them to integers
         user_ids = [int(i) for i in user_ids]
         # Convert user_ids to numpy array to use with sorted_indices
@@ -68,7 +71,22 @@ class DataManger:
         user_embeddings = user_embeddings[sorted_indices]
         user_ids = user_ids[sorted_indices]
 
-
+        item_embeddings = None
+        if item_embeddings_path:
+            x_item = np.load(item_embeddings_path)
+            item_embeddings = x_item['embeddings']
+            item_ids = np.array([int(i) for i in x_item['app_id']]) # Assuming the key is 'app_id'
+            item_sorted_indices = np.argsort(item_ids)
+            item_embeddings = item_embeddings[item_sorted_indices]
+            unique_item_ids = item_ids[item_sorted_indices]
+            print(f"Loaded {len(unique_item_ids)} items from embeddings file.")
+        else:
+            # Fallback to getting item IDs from interaction data
+            unique_item_ids = np.unique(np.concatenate((train_data['app_id'].values, test_data['app_id'].values)))
+            unique_item_ids = np.array(sorted(unique_item_ids))
+        
+            print(f"Loaded {len(unique_item_ids)} items from CSV files.")
+        
         unique_user_ids = np.unique(np.concatenate((train_data['user_id'].values, test_data['user_id'].values)))
         unique_item_ids = np.unique(np.concatenate((train_data['app_id'].values, test_data['app_id'].values)))
 
@@ -109,4 +127,4 @@ class DataManger:
         print(f"URM train shape: {URM_train.shape}, nonzero: {URM_train.nnz}")
         print(f"URM test shape: {URM_test.shape}, nonzero: {URM_test.nnz}")
         
-        return URM_train, URM_test, user_embeddings
+        return URM_train, URM_test, user_embeddings, item_embeddings

@@ -1,11 +1,11 @@
-from RecSysFramework.Recommenders.Neural.DeepLearningRecommender import DeepLearningRecommender
+from RecSysFramework.Recommenders.Neural.DeepLearningRecommenderEmbeddingsPrototype import DeepLearningRecommenderPrototype
 import torch.nn as nn
 import torch
 import numpy as np
 
-class TwoTowerRecProductNorm(DeepLearningRecommender):
+class TwoTowerRecProductNorm(DeepLearningRecommenderPrototype):
 
-    RECOMMENDER_NAME = """TwoTowerRecommenderProduct"""
+    RECOMMENDER_NAME = """TwoTowerRecommenderProductPrototype"""
 
     def __init__(self, URM_train, num_users, num_items, user_embeddings_dim=None, item_embeddings_dim=None, first_dim_layer=10, layers=[10], verbose = True):
         super().__init__(URM_train, verbose)
@@ -50,23 +50,23 @@ class TwoTowerRecProductNorm(DeepLearningRecommender):
         
         self.to(self.device)
 
-    def forward(self, user_input, item_input, user_embedding=None, item_embedding=None):
+    def forward(self, user_input=None, item_input=None, user_embeddings=None, item_embeddings=None):
 
-        if user_embedding is None and item_embedding is None:
+        if user_embeddings is None and item_embeddings is None:
             mlp_user_vector = self.mlp_embedding_user(user_input.long())
             mlp_item_vector = self.mlp_embedding_item(item_input.long())
 
-        elif user_embedding is None and item_embedding is not None:
+        elif user_embeddings is None and item_embeddings is not None:
             mlp_user_vector = self.mlp_embedding_user(user_input.long())
-            mlp_item_vector = item_embedding
+            mlp_item_vector = item_embeddings
 
-        elif user_embedding is not None and item_embedding is None:
-            mlp_user_vector = user_embedding
+        elif user_embeddings is not None and item_embeddings is None:
+            mlp_user_vector = user_embeddings
             mlp_item_vector = self.mlp_embedding_item(item_input.long())
 
         else:
-            mlp_user_vector = user_embedding
-            mlp_item_vector = item_embedding
+            mlp_user_vector = user_embeddings
+            mlp_item_vector = item_embeddings
 
         for layer in self.mlp_layers_tower_user:
             mlp_user_vector = layer(mlp_user_vector)

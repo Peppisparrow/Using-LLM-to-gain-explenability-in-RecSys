@@ -57,7 +57,7 @@ for i, user_id in enumerate(user_ids_for_embedding):
 
 # Save the final Pickle file.
 final_output_path = f"{data_dir}/user_results_with_embeddings_mxbai.pkl"
-print(f"\n💾 Saving the complete final file to '{final_output_path}'...")
+print(f"\nSaving the complete final file to '{final_output_path}'...")
 with open(final_output_path, "wb") as f:
     pickle.dump(final_results, f, protocol=pickle.HIGHEST_PROTOCOL)
 
