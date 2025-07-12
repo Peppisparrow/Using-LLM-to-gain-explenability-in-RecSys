@@ -1,6 +1,7 @@
 import os
 from functools import partial
 from pathlib import Path
+from argparse import ArgumentParser
 
 import optuna
 import pandas as pd
@@ -18,9 +19,9 @@ from Prototype.utils.optuna_utils import SaveResults
 METRIC = 'map'
 METRIC_K = 10
 BASE_OPTUNA_FOLDER = Path("Prototype/optuna/")
-STUDY_NAME = "implicit_prototype_MAP_RANDOM_4096"
-DATA_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/big')
-USER_EMBEDDING_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/big/user_embeddings_compressed.npz')
+# STUDY_NAME = "implicit_prototype_MAP_RANDOM_4096"
+# DATA_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/big')
+# USER_EMBEDDING_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/big/user_embeddings_compressed.npz')
 # ---------- /CONSTANTS ----------
 
 def objective_function(trial, user_embeddings, URM_train, URM_test):
@@ -92,4 +93,17 @@ def main():
                         n_trials = 100)
 
 if __name__ == "__main__":
+    parser = ArgumentParser(description="Run Optuna study for IALS with fixed alpha")
+    parser.add_argument("--study_name", type=str, help="Name of the Optuna study")
+    parser.add_argument("--data_path", type=str, help="Path to the dataset with train and test csv files")
+    parser.add_argument("--user_embedding_path", type=str, help="Path to the user embeddings file")
+    args = parser.parse_args()
+    
+    
+    STUDY_NAME = args.study_name
+    DATA_PATH = Path(args.data_path)
+    USER_EMBEDDING_PATH = Path(args.user_embedding_path)
+    
+    print(f"Running study: {STUDY_NAME} with data path: {DATA_PATH} and user embedding path: {USER_EMBEDDING_PATH}")
+    
     main()

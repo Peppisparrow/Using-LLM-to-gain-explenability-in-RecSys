@@ -1,6 +1,7 @@
 import os
 from functools import partial
 from pathlib import Path
+from argparse import ArgumentParser
 
 import optuna
 import pandas as pd
@@ -81,4 +82,17 @@ def main():
                         n_trials = 100)
 
 if __name__ == "__main__":
+    parser = ArgumentParser(description="Run Optuna study for IALS with fixed alpha")
+    parser.add_argument("--study_name", type=str, help="Name of the Optuna study")
+    parser.add_argument("--data_path", type=str, help="Path to the dataset with train and test csv files")
+    parser.add_argument("--user_embedding_path", type=str, help="Path to the user embeddings file")
+    args = parser.parse_args()
+    
+    
+    STUDY_NAME = args.study_name
+    DATA_PATH = Path(args.data_path)
+    USER_EMBEDDING_PATH = Path(args.user_embedding_path)
+    
+    print(f"Running study: {STUDY_NAME} with data path: {DATA_PATH} and user embedding path: {USER_EMBEDDING_PATH}")
+    
     main()
