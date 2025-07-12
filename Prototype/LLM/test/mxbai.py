@@ -3,10 +3,11 @@ from sentence_transformers import SentenceTransformer # <-- Key Library
 from tqdm import tqdm
 import pickle
 import numpy as np
+from LLM.utils.convert_npz import convert_to_npz
 
 # --- 1. Data Loading ---
 # This section remains unchanged.
-data_dir = "Dataset/steam/filtering_no_desc_giappo_corean_k10"
+data_dir = "Dataset/steam/filtering_no_desc_giappo_corean_k10/mid"
 results_path = f"{data_dir}/user_results_final.pkl"
 print(f"🔄 Loading results from '{results_path}'...")
 try:
@@ -61,3 +62,12 @@ with open(final_output_path, "wb") as f:
     pickle.dump(final_results, f, protocol=pickle.HIGHEST_PROTOCOL)
 
 print("✨ Processing complete!")
+
+results_path = f"{data_dir}/user_results_with_embeddings_mxbai.pkl"
+with open(results_path, "rb") as f:
+        text_results = pickle.load(f)
+
+output_npz_file = f"{data_dir}/user_embeddings_compressed_mxbai"
+    
+    # Esegue la funzione di conversione
+convert_to_npz(text_results, output_npz_file)

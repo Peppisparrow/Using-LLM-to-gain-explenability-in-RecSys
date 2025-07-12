@@ -4,10 +4,11 @@ from tqdm import tqdm
 import pickle
 import json
 import numpy as np
+from LLM.utils.convert_npz import convert_to_npz
 
 # --- 1. Caricamento Dati ---
 # The data loading part remains the same.
-data_dir = "Dataset/steam/filtering_no_desc_giappo_corean_k10/mid"
+data_dir = "Dataset/steam/filtering_no_desc_giappo_corean_k10/small"
 results_path = f"{data_dir}/user_results_final.pkl"
 print(f"🔄 Loading results from '{results_path}'...")
 try:
@@ -59,3 +60,13 @@ print(f"\n💾 Saving final results to '{final_output_path}'...")
 with open(final_output_path, "wb") as f:
     pickle.dump(final_results, f, protocol=pickle.HIGHEST_PROTOCOL)
 print("✨ Processing complete!")
+
+results_path = f"{data_dir}/user_results_with_embeddings_t5.pkl"
+with open(results_path, "rb") as f:
+        text_results = pickle.load(f)
+
+output_npz_file = f"{data_dir}/user_embeddings_compressed_t5"
+    
+    # Esegue la funzione di conversione
+convert_to_npz(text_results, output_npz_file)
+

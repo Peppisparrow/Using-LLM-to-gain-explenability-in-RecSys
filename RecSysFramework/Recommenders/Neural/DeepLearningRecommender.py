@@ -268,7 +268,7 @@ class DeepLearningRecommender(nn.Module, BaseRecommender):
     #     final_predictions = np.concatenate(predictions_list, axis=1)
 
     #     return final_predictions
-    def _compute_item_score(self, user_id_array, items_to_compute=None, batch_size=32):
+    def _compute_item_score(self, user_id_array, items_to_compute=None, batch_size=4096):
         """
         Versione ultra-ottimizzata che esegue il pairing utente-item direttamente su GPU.
         """

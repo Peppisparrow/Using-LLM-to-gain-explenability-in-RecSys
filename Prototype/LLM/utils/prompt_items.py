@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 # --- FILE PATHS ---
 # Adjust these paths to match your file locations
-data_dir = 'Dataset/steam/filtering_no_desc_giappo_corean_k10/mid'
+data_dir = 'Dataset/steam/filtering_no_desc_giappo_corean_k10'
 METADATA_PATH = 'Dataset/steam/games_metadata.json'
 GAMES_PATH = f'{data_dir}/games.csv'
 OUTPUT_PATH = f'{data_dir}/game_prompts.json' # Output file for individual game prompts

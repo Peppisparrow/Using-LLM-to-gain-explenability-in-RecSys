@@ -8,21 +8,21 @@ import torch
 # Defining Recommender
 from RecSysFramework.Recommenders.Neural.TwoTowerRecommender import TwoTowerRecommenderProduct
 from RecSysFramework.Recommenders.Neural.TwoTowerRecommender import TwoTowerRecProductNorm
-from RecSysFramework.Recommenders.Neural.TwoTowerRecommender import TwoTowerRecProductNormSeq
 from Prototype.data_manager import DataManger
 from Prototype.utils.optuna_utils import SaveResults
 from RecSysFramework.Evaluation.Evaluator import EvaluatorHoldout
-import cProfile
-import pstats
-import io
-
+# import cProfile
+# import pstats
+# import io
+# Current layers: [256 192 128  64   1]
+# Current parameters: epochs=10, batch_size=2048, learning_rate=0.001, weight_decay=1e-05, layers=[256 192 128  64   1]
 # ---------- CONSTANTS ----------
 METRIC = 'MAP_MIN_DEN'
 METRIC_K = 10
 BASE_OPTUNA_FOLDER = Path("Prototype/optuna/")
-STUDY_NAME = "2Tower_prova"
-DATA_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/mid')
-USER_EMBEDDING_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/mid/user_embeddings_compressed_t5.npz')
+STUDY_NAME = "2Tower_product_norm"
+DATA_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10')
+USER_EMBEDDING_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/user_embeddings_compressed_t5.npz')
 # ---------- /CONSTANTS ----------
 
 def objective_function(trial, URM_train, URM_test):
@@ -44,18 +44,11 @@ def objective_function(trial, URM_train, URM_test):
     batch_size = trial.suggest_int("batch_size", 512, 4096)
     learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
-    output= 2 ** trial.suggest_int("input", 4, 8)
-    moltiplication= 2 ** trial.suggest_int("output", 1, 3)
-    input = output * moltiplication
+    input = 2 ** trial.suggest_int("input", 4, 7)
     n_layers= trial.suggest_int("n_layers", 2, 5)
     # output = 1
-    learning_rate = 1e-3
-    weight_decay = 1e-5
-    batch_size = 2048
-    output = 64
-    input = 1024
-    n_layers = 5
-    layers = np.linspace(input, output, n_layers + 2, dtype=np.int16)
+    output = 1
+    layers = np.linspace(input, output, n_layers, dtype=np.int16)
     layers = layers.astype(int)
     print(f"Current layers: {layers}")
     recommender = TwoTowerRecProductNorm(URM_train, URM_train.shape[0], URM_train.shape[1], layers=layers, verbose=True)
@@ -63,25 +56,25 @@ def objective_function(trial, URM_train, URM_test):
     optimizer = torch.optim.AdamW(params=recommender.parameters(), lr=learning_rate, weight_decay=weight_decay, fused=True)
     print("Optimizer initialized.")
     recommender = torch.compile(recommender)
-    recommender.fit(epochs=1, batch_size=batch_size, optimizer=optimizer)
+    recommender.fit(epochs=epochs, batch_size=batch_size, optimizer=optimizer)
     print("Recommender fitted.")
     evaluator_test = EvaluatorHoldout(URM_test, cutoff_list=[METRIC_K], verbose=True, exclude_seen=True)
-    profiler = cProfile.Profile()
-    profiler.enable()
+    # profiler = cProfile.Profile()
+    # profiler.enable()
 
-    print("--- INIZIO PROFILAZIONE EVALUATION ---")
+    # print("--- INIZIO PROFILAZIONE EVALUATION ---")
     result_dict, _ = evaluator_test.evaluateRecommender(recommender)
-    print("--- FINE PROFILAZIONE EVALUATION ---")
-    profiler.disable()
+    # print("--- FINE PROFILAZIONE EVALUATION ---")
+    # profiler.disable()
 
-    # 5. Stampa i risultati del profiler
-    s = io.StringIO()
-    # Ordina le statistiche per 'cumulative time' per vedere dove è stato speso più tempo in totale
-    ps = pstats.Stats(profiler, stream=s).sort_stats('cumulative')
-    ps.print_stats(40)  # Stampa le 40 funzioni più lente
+    # # 5. Stampa i risultati del profiler
+    # s = io.StringIO()
+    # # Ordina le statistiche per 'cumulative time' per vedere dove è stato speso più tempo in totale
+    # ps = pstats.Stats(profiler, stream=s).sort_stats('cumulative')
+    # ps.print_stats(40)  # Stampa le 40 funzioni più lente
 
-    print("\n\n--- RISULTATI DEL PROFILER (Top 40 funzioni per tempo cumulativo) ---")
-    print(s.getvalue())
+    # print("\n\n--- RISULTATI DEL PROFILER (Top 40 funzioni per tempo cumulativo) ---")
+    # print(s.getvalue())
     result = result_dict.loc[METRIC_K][METRIC]
     
     print("Current {} = {:.4f} with parameters ".format(METRIC, result))
@@ -104,7 +97,7 @@ def main():
 
     optuna_study.optimize(objective_function_with_data,
                         callbacks=[save_results],
-                        n_trials = 1)
+                        n_trials = 100)
 
 if __name__ == "__main__":
     main()
