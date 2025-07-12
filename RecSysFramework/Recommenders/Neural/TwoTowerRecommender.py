@@ -173,7 +173,7 @@ class TwoTowerRecProductNorm(DeepLearningRecommender):
             input_size_tower2 = output_size
         
         # Il prediction layer prende l'output dopo la fusione delle torri
-        self.prediction_layer = nn.Linear(layers[-1], 1, bias=True, device=self.device)
+        # self.prediction_layer = nn.Linear(layers[-1], 1, bias=True, device=self.device)
         
         self.to(self.device)
 
@@ -191,8 +191,8 @@ class TwoTowerRecProductNorm(DeepLearningRecommender):
             mlp_item_vector = layer(mlp_item_vector)
 
         # Fusione tramite prodotto elemento per elemento
-        predict_vector = mlp_user_vector * mlp_item_vector
+        predict_vector = torch.sum(mlp_user_vector * mlp_item_vector, dim=1, keepdim=True)
         
         # Predizione finale
-        prediction = torch.sigmoid(self.prediction_layer(predict_vector))
+        prediction = torch.sigmoid((predict_vector))
         return prediction

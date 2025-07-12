@@ -47,7 +47,7 @@ def objective_function(trial, URM_train, URM_test):
     input = 2 ** trial.suggest_int("input", 4, 7)
     n_layers= trial.suggest_int("n_layers", 2, 5)
     # output = 1
-    output = 1
+    output = 4
     layers = np.linspace(input, output, n_layers, dtype=np.int16)
     layers = layers.astype(int)
     print(f"Current layers: {layers}")
