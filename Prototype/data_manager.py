@@ -28,6 +28,18 @@ class DataManger:
         Returns the user embeddings.
         """
         return self.user_embeddings
+    
+    def get_user_mapping(self):
+        """
+        Returns a mapping of user IDs to indices.
+        """
+        return self.user_id_to_index
+    
+    def get_item_mapping(self):
+        """
+        Returns a mapping of item IDs to indices.
+        """
+        return self.item_id_to_index
 
     def load_data(self,
                   user_embeddings_path: Path,
@@ -63,15 +75,19 @@ class DataManger:
         unique_user_ids = np.array(sorted(unique_user_ids))
         unique_item_ids = np.array(sorted(unique_item_ids))
 
+
         # Mapping user_ids and review_ids to indices
         user_id_to_index = {user_id: index for index, user_id in enumerate(user_ids)}
-        item_id_to_index = {review_id: index for index, review_id in enumerate(unique_item_ids)}
+        item_id_to_index = {app_id: index for index, app_id in enumerate(unique_item_ids)}
+        
+        self.user_id_to_index = user_id_to_index
+        self.item_id_to_index = item_id_to_index
 
         train_data['user_id'] = train_data['user_id'].map(user_id_to_index)
-        train_data['review_id'] = train_data['app_id'].map(item_id_to_index)
+        train_data['app_id'] = train_data['app_id'].map(item_id_to_index)
 
         test_data['user_id'] = test_data['user_id'].map(user_id_to_index)
-        test_data['review_id'] = test_data['app_id'].map(item_id_to_index)
+        test_data['app_id'] = test_data['app_id'].map(item_id_to_index)
 
         train_data['interaction'] = 1
         test_data['interaction'] = 1
@@ -80,11 +96,11 @@ class DataManger:
         n_items = len(unique_item_ids)
 
         URM_train = sps.coo_matrix((train_data['interaction'].values, 
-                                (train_data['user_id'].values, train_data['review_id'].values)),
+                                (train_data['user_id'].values, train_data['app_id'].values)),
                                 shape=(n_users, n_items))
 
         URM_test = sps.coo_matrix((test_data['interaction'].values, 
-                                (test_data['user_id'].values, test_data['review_id'].values)),
+                                (test_data['user_id'].values, test_data['app_id'].values)),
                                 shape=(n_users, n_items))
 
         URM_train = URM_train.tocsr()
