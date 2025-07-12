@@ -62,7 +62,7 @@ class TwoTowerRecConcatNorm(DeepLearningRecommender):
         # --- Fine Modifica ---
 
         # Il prediction layer ora prende l'output dell'ultimo blocco
-        self.prediction_layer = nn.Linear(layers[-1], 1, bias=True, device=self.device)
+        # self.prediction_layer = nn.Linear(layers[-1], 1, bias=True, device=self.device)
         
         # Inizializzazione (può essere omessa se si usano le default di PyTorch)
         # for m in self.modules():
@@ -84,9 +84,9 @@ class TwoTowerRecConcatNorm(DeepLearningRecommender):
         for layer in self.mlp_layers:
             mlp_vector = layer(mlp_vector)
         # --- Fine Modifica ---
-        
+        predict_vector = torch.sum(mlp_vector, dim=1, keepdim=True)
         # L'output dell'MLP va al prediction layer
-        prediction = torch.sigmoid(self.prediction_layer(mlp_vector))
+        prediction = torch.sigmoid(predict_vector)
         return prediction
 
 class TwoTowerRecommenderProduct(DeepLearningRecommender):
