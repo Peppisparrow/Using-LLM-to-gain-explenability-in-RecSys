@@ -6,8 +6,10 @@ import optuna
 import pandas as pd
 import torch
 from argparse import ArgumentParser
+from implicit.evaluation import ranking_metrics_at_k
+from implicit.als import AlternatingLeastSquares
 # Defining Recommender
-from RecSysFramework.Recommenders.Neural.TwoTowerRecommenderEmbeddingsPrototype import TwoTowerRecProductNorm
+from RecSysFramework.Recommenders.Neural.TwoTowerE import TwoTowerRecommender
 from Prototype.data_manager_peppe import DataManger
 from Prototype.utils.optuna_utils import SaveResults
 from RecSysFramework.Evaluation.Evaluator import EvaluatorHoldout
@@ -23,16 +25,6 @@ BASE_OPTUNA_FOLDER = Path("Prototype/optuna/")
 
 def objective_function(trial, URM_train, URM_test, item_embeddings=None, user_embeddings=None):
 
-    if user_embeddings is not None:
-        print("Using user embeddings from the data manager.")
-        user_embeddings_dim = user_embeddings.shape[1]
-    else:
-        user_embeddings_dim = None
-    if item_embeddings is not None:
-        item_embeddings_dim = item_embeddings.shape[1]
-    else:
-        item_embeddings_dim = None
-
     epochs = trial.suggest_int("epochs", 5, 10)
     batch_size = trial.suggest_int("batch_size", 512, 4096)
     learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
@@ -45,19 +37,39 @@ def objective_function(trial, URM_train, URM_test, item_embeddings=None, user_em
     layers = np.linspace(input, output, n_layers, dtype=np.int16)
     layers = layers.astype(int)
     print(f"Current layers: {layers}")
-    recommender = TwoTowerRecProductNorm(URM_train, URM_train.shape[0], URM_train.shape[1], user_embeddings_dim=user_embeddings_dim, item_embeddings_dim=item_embeddings_dim, layers=layers, verbose=True, first_dim_layer=32)
+    recommender = TwoTowerRecommender(URM_train, URM_train.shape[0], URM_train.shape[1], user_embeddings=user_embeddings, item_embeddings=item_embeddings, layers=layers, verbose=True)
     print(f"Current parameters: epochs={epochs}, batch_size={batch_size}, learning_rate={learning_rate}, weight_decay={weight_decay}, layers={layers}")
     optimizer = torch.optim.AdamW(params=recommender.parameters(), lr=learning_rate, weight_decay=weight_decay, fused=True)
     print("Optimizer initialized.")
     recommender = torch.compile(recommender)
-    recommender.fit(epochs=1, batch_size=batch_size, optimizer=optimizer, user_embeddings=user_embeddings, item_embeddings=item_embeddings)
+    recommender.fit(epochs=1, batch_size=batch_size, optimizer=optimizer)
     print("Recommender fitted.")
-    evaluator_test = EvaluatorHoldout(URM_test, cutoff_list=[METRIC_K], verbose=True, exclude_seen=True)
-    result_dict, _ = evaluator_test.evaluateRecommender(recommender)
-    result = result_dict.loc[METRIC_K][METRIC] 
+    recommender.compute_all_embeddings(batch_size=batch_size)
+
+
+    fake_model = AlternatingLeastSquares(
+        regularization=0.1,
+        factors=recommender.ITEM_factors.shape[1],
+        iterations=1,  # We don't need to train the model, just need the structure
+        num_threads=1,  # Number of threads can be adjusted based on the environment
+        calculate_training_loss=False,  # We don't need training loss for this task
+        use_gpu=False,  # Use GPU for training
+
+    )
+    fake_model.item_factors = recommender.ITEM_factors
+    fake_model.user_factors = recommender.USER_factors
     
-    print("Current {} = {:.16f} with parameters ".format(METRIC, result))
-    return result
+    fake_model = fake_model.to_gpu()
+
+    result_imp = ranking_metrics_at_k(
+        fake_model,
+        URM_train,
+        URM_test,
+        K=METRIC_K,
+    )['map']
+    
+    print(f"MAP@{METRIC_K} from implicit: {result_imp:.6f}")
+    return result_imp
 
 def main():
     data_manager = DataManger(data_path=DATA_PATH, user_embedding_path=USER_EMBEDDING_PATH, item_embeddings_path=ITEM_EMBEDDING_PATH)
