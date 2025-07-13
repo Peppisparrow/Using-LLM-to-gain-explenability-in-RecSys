@@ -12,7 +12,7 @@ from Prototype.data_manager_peppe import DataManger
 from Prototype.utils.optuna_utils import SaveResults
 from RecSysFramework.Evaluation.Evaluator import EvaluatorHoldout
 # ---------- CONSTANTS ----------
-METRIC = 'MAP_MIN_DEN'
+METRIC = 'MAP'
 METRIC_K = 10
 BASE_OPTUNA_FOLDER = Path("Prototype/optuna/")
 # STUDY_NAME = "2Tower_product_norm_prototype"
@@ -56,7 +56,7 @@ def objective_function(trial, URM_train, URM_test, item_embeddings=None, user_em
     result_dict, _ = evaluator_test.evaluateRecommender(recommender)
     result = result_dict.loc[METRIC_K][METRIC] 
     
-    print("Current {} = {:.4f} with parameters ".format(METRIC, result))
+    print("Current {} = {:.16f} with parameters ".format(METRIC, result))
     return result
 
 def main():
