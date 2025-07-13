@@ -20,7 +20,7 @@ class TestDataManager(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
 
-    def _create_dummy_files(self, users, items, users_npz, items_npz, embed_dim=5, interaction_pattern='one_to_one'):
+    def _create_dummy_files(self, users, items, users_npz=None, items_npz=None, embed_dim=5, interaction_pattern='one_to_one'):
         if interaction_pattern == 'one_to_one':
             assert len(users) == len(items), "Per 'one_to_one', le liste devono avere la stessa lunghezza."
             user_ids_list, item_ids_list = users, items
@@ -36,9 +36,12 @@ class TestDataManager(unittest.TestCase):
         train_df.to_csv(self.data_path / 'train_recommendations.csv', index=False)
         test_df.to_csv(self.data_path / 'test_recommendations.csv', index=False)
 
-        user_vectors = [np.full(embed_dim, uid, dtype=np.float32) for uid in users_npz]
-        user_path = self.temp_dir / 'user_embeddings.npz'
-        np.savez(user_path, embeddings=np.array(user_vectors), user_ids=np.array(users_npz, dtype=str))
+        # La creazione degli embedding è ora opzionale
+        user_path = None
+        if users_npz:
+            user_vectors = [np.full(embed_dim, uid, dtype=np.float32) for uid in users_npz]
+            user_path = self.temp_dir / 'user_embeddings.npz'
+            np.savez(user_path, embeddings=np.array(user_vectors), user_ids=np.array(users_npz, dtype=str))
 
         item_path = None
         if items_npz:
@@ -177,6 +180,45 @@ class TestDataManager(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "Missing embeddings for 1 users"):
             DataManger(user_embedding_path=user_path, data_path=self.data_path, item_embeddings_path=item_path)
+
+    def test_no_user_embeddings_with_item_embeddings(self):
+        """🧪 Test di funzionamento senza user_embeddings ma con item_embeddings."""
+        users_csv = [10, 20]
+        items_csv = [101, 102]
+        # Non creiamo un file per gli user (users_npz=None)
+        _, item_path = self._create_dummy_files(
+            users_csv, items_csv, users_npz=None, items_npz=items_csv
+        )
+        
+        # Inizializziamo il DataManager senza passare lo user_embedding_path
+        dm = DataManger(data_path=self.data_path, item_embeddings_path=item_path)
+
+        # Verifichiamo che gli user embeddings siano None e gli altri dati corretti
+        self.assertIsNone(dm.get_user_embeddings(), "User embeddings dovrebbe essere None.")
+        self.assertIsNotNone(dm.get_item_embeddings(), "Item embeddings non dovrebbe essere None.")
+        self.assertEqual(dm.get_URM_train().shape, (2, 2), "La forma della URM non è corretta.")
+        self.assertEqual(dm.get_item_embeddings().shape[0], 2, "Il numero di item embeddings non è corretto.")
+        self.assertEqual(len(dm.get_user_mapping()), 2, "La mappa degli utenti non è corretta.")
+
+    def test_no_embeddings_at_all(self):
+        """🧪 Test di funzionamento senza nessun embedding fornito."""
+        users_csv = [55, 66, 77]
+        items_csv = [1, 2, 3]
+        
+        # Non creiamo nessun file di embedding (users_npz=None, items_npz=None)
+        _, _ = self._create_dummy_files(
+            users_csv, items_csv, users_npz=None, items_npz=None
+        )
+        
+        # Inizializziamo il DataManager senza passare nessun path di embedding
+        dm = DataManger(data_path=self.data_path)
+        
+        # Verifichiamo che entrambi gli embedding siano None e che la URM sia corretta
+        self.assertIsNone(dm.get_user_embeddings(), "User embeddings dovrebbe essere None.")
+        self.assertIsNone(dm.get_item_embeddings(), "Item embeddings dovrebbe essere None.")
+        self.assertEqual(dm.get_URM_train().shape, (3, 3), "La forma della URM non è corretta.")
+        self.assertEqual(len(dm.get_user_mapping()), 3, "La mappa degli utenti non è corretta.")
+        self.assertEqual(len(dm.get_item_mapping()), 3, "La mappa degli item non è corretta.")
 
 if __name__ == '__main__':
     unittest.main()
