@@ -64,7 +64,7 @@ def get_item_embeddings(item2index):
     """
     item_embeddings_DICT = np.load(ITEM_EMBEDDING_PATH)
     item_embeddings = item_embeddings_DICT['embeddings']
-    item_ids = item_embeddings_DICT['item_id']
+    item_ids = item_embeddings_DICT['app_id']
     
     # Convert item_ids to integers
     item_ids = [int(item_id) for item_id in item_ids]
