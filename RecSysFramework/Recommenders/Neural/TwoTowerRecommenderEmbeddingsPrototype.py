@@ -55,18 +55,29 @@ class TwoTowerRecProductNorm(DeepLearningRecommenderPrototype):
         if user_embeddings is None and item_embeddings is None:
             mlp_user_vector = self.mlp_embedding_user(user_input.long())
             mlp_item_vector = self.mlp_embedding_item(item_input.long())
+            if self.DEBUG and self.oneprint:
+                print("No embeddings provided, using embeddings from input data.")
+                self.oneprint = False
 
         elif user_embeddings is None and item_embeddings is not None:
             mlp_user_vector = self.mlp_embedding_user(user_input.long())
             mlp_item_vector = item_embeddings
+            if self.DEBUG and self.oneprint:
+                print("Item embeddings provided, but not user embeddings.")
+                self.oneprint = False
 
         elif user_embeddings is not None and item_embeddings is None:
             mlp_user_vector = user_embeddings
             mlp_item_vector = self.mlp_embedding_item(item_input.long())
-
+            if self.DEBUG and self.oneprint:
+                print("User embeddings provided, but not item embeddings.")
+                self.oneprint = False
         else:
             mlp_user_vector = user_embeddings
             mlp_item_vector = item_embeddings
+            if self.DEBUG and self.oneprint:
+                print("Item and user embeddings provided.")
+                self.oneprint = False
 
         for layer in self.mlp_layers_tower_user:
             mlp_user_vector = layer(mlp_user_vector)

@@ -20,7 +20,7 @@ USER_EMBEDDING_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_cor
 ITEM_EMBEDDING_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/game_embeddings_t5.npz')
 # ---------- /CONSTANTS ----------
 
-def objective_function(trial, URM_train, URM_test, item_embeddings):
+def objective_function(trial, URM_train, URM_test, item_embeddings=None, user_embeddings=None):
 
     epochs = trial.suggest_int("epochs", 5, 10)
     batch_size = trial.suggest_int("batch_size", 512, 4096)
@@ -34,12 +34,12 @@ def objective_function(trial, URM_train, URM_test, item_embeddings):
     layers = np.linspace(input, output, n_layers, dtype=np.int16)
     layers = layers.astype(int)
     print(f"Current layers: {layers}")
-    recommender = TwoTowerRecProductNorm(URM_train, URM_train.shape[0], URM_train.shape[1], item_embeddings_dim=item_embeddings.shape[1], layers=layers, verbose=True, first_dim_layer=32)
+    recommender = TwoTowerRecProductNorm(URM_train, URM_train.shape[0], URM_train.shape[1], user_embeddings_dim=user_embeddings.shape[1], item_embeddings_dim=item_embeddings.shape[1], layers=layers, verbose=True, first_dim_layer=32)
     print(f"Current parameters: epochs={epochs}, batch_size={batch_size}, learning_rate={learning_rate}, weight_decay={weight_decay}, layers={layers}")
     optimizer = torch.optim.AdamW(params=recommender.parameters(), lr=learning_rate, weight_decay=weight_decay, fused=True)
     print("Optimizer initialized.")
     recommender = torch.compile(recommender)
-    recommender.fit(epochs=1, batch_size=batch_size, optimizer=optimizer, item_embeddings=item_embeddings)
+    recommender.fit(epochs=1, batch_size=batch_size, optimizer=optimizer, user_embeddings=user_embeddings, item_embeddings=item_embeddings)
     print("Recommender fitted.")
     evaluator_test = EvaluatorHoldout(URM_test, cutoff_list=[METRIC_K], verbose=True, exclude_seen=True)
     result_dict, _ = evaluator_test.evaluateRecommender(recommender)
@@ -53,11 +53,13 @@ def main():
     URM_train = data_manager.get_URM_train()
     URM_test = data_manager.get_URM_test()
     item_embeddings = data_manager.get_item_embeddings()
+    user_embeddings = data_manager.get_user_embeddings()
     objective_function_with_data = partial(
         objective_function,
         URM_train=URM_train,
         URM_test=URM_test,
-        item_embeddings=item_embeddings
+        item_embeddings=item_embeddings,
+        user_embeddings=user_embeddings
     )
         
     optuna_study = optuna.create_study(direction="maximize", study_name=STUDY_NAME, load_if_exists=True, storage="sqlite:///Prototype/optuna/optuna_study.db", sampler=optuna.samplers.TPESampler(seed=43))

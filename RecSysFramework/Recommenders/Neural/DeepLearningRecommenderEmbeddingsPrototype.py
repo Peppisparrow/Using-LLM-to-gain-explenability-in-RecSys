@@ -20,6 +20,11 @@ class DeepLearningRecommenderPrototype(nn.Module, BaseRecommender):
             self.device = torch.device("cpu")
         self.user_embeddings = None
         self.item_embeddings = None
+        
+        self.DEBUG = True
+        self.oneprint = True
+        self.oneprintfit = True
+        self.oneprintcompute = True
 
     def _data_generator_fixed(self, batch_size, num_negatives=1, num_items=None):
         """
@@ -104,6 +109,9 @@ class DeepLearningRecommenderPrototype(nn.Module, BaseRecommender):
                 else:
                     forward_args['item_embeddings'] = item_embeddings[item_input_ids]
                 # --- END MODIFIED LOGIC ---
+                if self.DEBUG and self.oneprintfit:
+                    print(list(forward_args.keys()))
+                    self.oneprintfit = False
                 predictions = self.forward(**forward_args)
                 
                 loss_fn = torch.nn.BCELoss()
@@ -166,6 +174,9 @@ class DeepLearningRecommenderPrototype(nn.Module, BaseRecommender):
                     item_embeddings_batch = item_embeddings[item_batch_ids_gpu]
                     forward_args['item_embeddings'] = item_embeddings_batch.repeat(num_users, 1)
                 # --- END MODIFIED LOGIC ---
+                if self.DEBUG and self.oneprintcompute:
+                    print(list(forward_args.keys()))
+                    self.oneprintcompute = False
 
                 predictions_batch = self.forward(**forward_args)
 
