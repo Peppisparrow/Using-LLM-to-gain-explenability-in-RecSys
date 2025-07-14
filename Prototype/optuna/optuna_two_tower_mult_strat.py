@@ -9,7 +9,7 @@ from argparse import ArgumentParser
 from implicit.evaluation import ranking_metrics_at_k
 from implicit.als import AlternatingLeastSquares
 # Defining Recommender
-from RecSysFramework.Recommenders.Neural.TwoTowerE import TwoTowerRecommender
+from RecSysFramework.Recommenders.Neural.TwoTowerMultipleStrategy import TwoTowerRecommender
 from Prototype.data_manager_peppe2 import DataManger
 from Prototype.utils.optuna_utils import SaveResults
 from RecSysFramework.Evaluation.Evaluator import EvaluatorHoldout
@@ -25,7 +25,7 @@ BASE_OPTUNA_FOLDER = Path("Prototype/optuna/")
 
 def objective_function(trial, URM_train, URM_test, item_embeddings=None, user_embeddings=None):
 
-    epochs = trial.suggest_int("epochs", 1, 10)
+    epochs = trial.suggest_int("epochs", 5, 10)
     batch_size = trial.suggest_int("batch_size", 512, 4096)
     learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
@@ -36,7 +36,19 @@ def objective_function(trial, URM_train, URM_test, item_embeddings=None, user_em
     layers = np.linspace(input, output, n_layers, dtype=np.int16)
     layers = layers.astype(int)
     print(f"Current layers: {layers}")
-    recommender = TwoTowerRecommender(URM_train, URM_train.shape[0], URM_train.shape[1], user_embeddings=user_embeddings, item_embeddings=item_embeddings, layers=layers, verbose=True)
+    
+    recommender = TwoTowerRecommender(URM_train,
+                                      URM_train.shape[0],
+                                      URM_train.shape[1],
+                                      user_embeddings=user_embeddings,
+                                      item_embeddings=item_embeddings,
+                                      layers=layers,
+                                      verbose=True,
+                                      user_embedding_mode='mixed',
+                                      item_embedding_mode='mixed',
+                                      debug=True
+                                      )
+    
     print(f"Current parameters: epochs={epochs}, batch_size={batch_size}, learning_rate={learning_rate}, weight_decay={weight_decay}, layers={layers}")
     optimizer = torch.optim.AdamW(params=recommender.parameters(), lr=learning_rate, weight_decay=weight_decay, fused=True)
     print("Optimizer initialized.")
@@ -91,7 +103,7 @@ def main():
         user_embeddings=user_embeddings
     )
         
-    optuna_study = optuna.create_study(direction="maximize", study_name=STUDY_NAME, load_if_exists=True, storage="sqlite:///Prototype/optuna/optuna_study.db", sampler=optuna.samplers.TPESampler(seed=43))
+    optuna_study = optuna.create_study(direction="maximize", study_name=STUDY_NAME, load_if_exists=True, storage="sqlite:///Prototype/optuna/optuna_study_4DEBUG.db", sampler=optuna.samplers.TPESampler(seed=43))
             
     save_results = SaveResults(csv_path=BASE_OPTUNA_FOLDER / f"logs/{STUDY_NAME}/trials_results.csv")
 

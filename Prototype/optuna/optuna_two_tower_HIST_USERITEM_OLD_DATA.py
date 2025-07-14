@@ -10,17 +10,13 @@ from implicit.evaluation import ranking_metrics_at_k
 from implicit.als import AlternatingLeastSquares
 # Defining Recommender
 from RecSysFramework.Recommenders.Neural.TwoTowerE import TwoTowerRecommender
-from Prototype.data_manager_peppe2 import DataManger
+from Prototype.data_manager_peppe import DataManger
 from Prototype.utils.optuna_utils import SaveResults
 from RecSysFramework.Evaluation.Evaluator import EvaluatorHoldout
 # ---------- CONSTANTS ----------
 METRIC = 'MAP'
 METRIC_K = 10
 BASE_OPTUNA_FOLDER = Path("Prototype/optuna/")
-# STUDY_NAME = "2Tower_product_norm_prototype"
-# DATA_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10')
-# USER_EMBEDDING_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/user_embeddings_compressed_t5.npz')
-# ITEM_EMBEDDING_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/game_embeddings_t5.npz')
 # ---------- /CONSTANTS ----------
 
 def objective_function(trial, URM_train, URM_test, item_embeddings=None, user_embeddings=None):

@@ -31,7 +31,7 @@ def objective_function(trial, URM_train, URM_test, item_embeddings=None, user_em
     weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
     output = 2 ** trial.suggest_int("input", 4, 10)
     moltiplier = 2 ** trial.suggest_int("multiplier", 0, 4)
-    n_layers= trial.suggest_int("n_layers", 2, 8)
+    n_layers= trial.suggest_int("n_layers", 2, 5)
     input = output * moltiplier
     layers = np.linspace(input, output, n_layers, dtype=np.int16)
     layers = layers.astype(int)

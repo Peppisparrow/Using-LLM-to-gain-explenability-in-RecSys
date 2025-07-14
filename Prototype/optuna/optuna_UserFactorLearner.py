@@ -91,7 +91,7 @@ def main():
         URM_test=URM_test
     )
         
-    optuna_study = optuna.create_study(direction="maximize", study_name=STUDY_NAME, load_if_exists=True, storage="sqlite:///Prototype/optuna/optuna_study.db")
+    optuna_study = optuna.create_study(direction="maximize", study_name=STUDY_NAME, load_if_exists=True, storage=f"sqlite:///{DB_PATH}")
             
     save_results = SaveResults(csv_path=BASE_OPTUNA_FOLDER / f"logs/{STUDY_NAME}/trials_results.csv")
 
@@ -105,6 +105,7 @@ if __name__ == "__main__":
     parser.add_argument("--data_path", type=str, help="Path to the dataset with train and test csv files")
     parser.add_argument("--user_embedding_path", type=str, help="Path to the user embeddings file")
     parser.add_argument("--item_embedding_path", type=str, help="Path to the item embeddings file")
+    parser.add_argument("--db_path", type=str, help="Path to the database file", default="Prototype/optuna/optuna_study.db")
     args = parser.parse_args()
     
     
@@ -112,6 +113,7 @@ if __name__ == "__main__":
     DATA_PATH = Path(args.data_path)
     USER_EMBEDDING_PATH = Path(args.user_embedding_path)
     ITEM_EMBEDDING_PATH = Path(args.item_embedding_path)
+    DB_PATH = args.db_path
     
     print(f"Running study: {STUDY_NAME} with data path: {DATA_PATH} and user embedding path: {USER_EMBEDDING_PATH}")
     

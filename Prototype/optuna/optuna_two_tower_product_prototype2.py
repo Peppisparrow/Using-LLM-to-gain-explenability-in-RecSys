@@ -9,8 +9,8 @@ from argparse import ArgumentParser
 from implicit.evaluation import ranking_metrics_at_k
 from implicit.als import AlternatingLeastSquares
 # Defining Recommender
-from RecSysFramework.Recommenders.Neural.TwoTowerE import TwoTowerRecommender
-from Prototype.data_manager_peppe2 import DataManger
+from RecSysFramework.Recommenders.Neural.TwoTower import TwoTowerRecommender
+from Prototype.data_manager_peppe import DataManger
 from Prototype.utils.optuna_utils import SaveResults
 from RecSysFramework.Evaluation.Evaluator import EvaluatorHoldout
 # ---------- CONSTANTS ----------
@@ -36,7 +36,7 @@ def objective_function(trial, URM_train, URM_test, item_embeddings=None, user_em
     layers = np.linspace(input, output, n_layers, dtype=np.int16)
     layers = layers.astype(int)
     print(f"Current layers: {layers}")
-    recommender = TwoTowerRecommender(URM_train, URM_train.shape[0], URM_train.shape[1], user_embeddings=user_embeddings, item_embeddings=item_embeddings, layers=layers, verbose=True)
+    recommender = TwoTowerRecommender(URM_train, URM_train.shape[0], URM_train.shape[1], layers=layers, verbose=True)
     print(f"Current parameters: epochs={epochs}, batch_size={batch_size}, learning_rate={learning_rate}, weight_decay={weight_decay}, layers={layers}")
     optimizer = torch.optim.AdamW(params=recommender.parameters(), lr=learning_rate, weight_decay=weight_decay, fused=True)
     print("Optimizer initialized.")
