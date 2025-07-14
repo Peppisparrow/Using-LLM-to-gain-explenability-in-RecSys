@@ -9,7 +9,7 @@ import torch
 from implicit.evaluation import ranking_metrics_at_k
 from implicit.als import AlternatingLeastSquares
 
-from RecSysFramework.Recommenders.Neural.TwoTowerHistory import TwoTowerRecommender
+from RecSysFramework.Recommenders.Neural.TwoTowerHistoryTrans import TwoTowerRecommender
 from Prototype.data_manager_history import DataManger
 from Prototype.utils.optuna_utils import SaveResults
 # import cProfile
@@ -36,10 +36,10 @@ def objective_function(trial, URM_train, URM_test, user_embeddings=None):
     input = 2 ** trial.suggest_int("input", 4, 7)
     n_layers= trial.suggest_int("n_layers", 2, 5)
     # output = 1
-    output = 128
-    input = 32
+    output = 32
+    input = 512
     n_layers = 6
-    batch_size = 4048
+    batch_size = 256
     layers = np.linspace(input, output, n_layers, dtype=np.int16)
     layers = layers.astype(int)
     print(f"Current layers: {layers}")

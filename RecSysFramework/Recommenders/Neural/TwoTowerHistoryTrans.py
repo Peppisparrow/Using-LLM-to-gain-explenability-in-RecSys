@@ -6,103 +6,105 @@ from tqdm import tqdm
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 from RecSysFramework.Recommenders.BaseMatrixFactorizationRecommender import BaseMatrixFactorizationRecommender
-class SelfAttentionAggregator(nn.Module):
+
+class PositionalEncoding(nn.Module):
     """
-    Aggrega una sequenza di item embeddings usando un blocco di self-attention
-    seguito da un'operazione di pooling.
+    Añade información posicional a los embeddings de la secuencia.
     """
-    def __init__(self, embedding_dim: int, num_heads: int = 4, dropout: float = 0.1):
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        position = torch.arange(max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+        pe = torch.zeros(max_len, 1, d_model)
+        pe[:, 0, 0::2] = torch.sin(position * div_term)
+        pe[:, 0, 1::2] = torch.cos(position * div_term)
+        # pe tiene shape [max_len, 1, d_model], lo hacemos no-entrenable
+        self.register_buffer('pe', pe)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Args:
-            embedding_dim (int): Dimensione degli embeddings. Deve essere divisibile per num_heads.
-            num_heads (int): Numero di "teste" per la multi-head attention.
-            dropout (float): Probabilità di dropout.
+            x: Tensor, shape [batch_size, seq_len, embedding_dim]
+        Returns:
+            Tensor con información posicional añadida.
         """
+        # Añadimos el encoding posicional
+        # self.pe es [max_len, 1, dim], x.size(1) es la longitud de la secuencia actual
+        x = x + self.pe[:x.size(1)].transpose(0, 1)
+        return self.dropout(x)
+
+class TransformerUserEmbedding(nn.Module):
+    """
+    Versión que utiliza un TransformerEncoder completo para agregar historiales de usuario.
+    """
+    def __init__(self, embedding_dim: int, num_heads: int, num_layers: int, dim_feedforward: int, dropout: float = 0.1):
         super().__init__()
+        self.embedding_dim = embedding_dim
         
-        # Il modulo standard di PyTorch per la multi-head self-attention.
-        self.attention = nn.MultiheadAttention(
-            embed_dim=embedding_dim,
-            num_heads=num_heads,
+        # 1. Capa de Encoding Posicional
+        self.pos_encoder = PositionalEncoding(embedding_dim, dropout)
+        
+        # 2. Capa del Transformer Encoder
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=embedding_dim,
+            nhead=num_heads,
+            dim_feedforward=dim_feedforward,
             dropout=dropout,
-            batch_first=False  # Ci aspettiamo input come [seq_len, batch, dim]
+            batch_first=True  # ¡Importante! Usamos batch_first=True para una mejor legibilidad
         )
-        # Layer Normalization per stabilizzare l'addestramento
+        
+        # 3. Pila de capas de Transformer
+        self.transformer_encoder = nn.TransformerEncoder(
+            encoder_layer=encoder_layer,
+            num_layers=num_layers
+        )
         self.layer_norm = nn.LayerNorm(embedding_dim)
 
     def forward(self, item_embeddings_list: list[torch.Tensor]) -> torch.Tensor:
         """
         Args:
-            item_embeddings_list (list[torch.Tensor]): Lista di tensori, dove
-                ogni tensore ha shape [num_items, embedding_dim].
+            item_embeddings_list (list[torch.Tensor]): Una lista de tensores.
+                Cada tensor tiene shape [num_items_per_user, embedding_dim].
 
         Returns:
-            torch.Tensor: Un tensore di user embeddings di shape [batch_size, embedding_dim].
-        """
-        user_embeddings = []
-        for item_embeddings in item_embeddings_list:
-            # Il modulo di attention si aspetta [seq_len, batch_size, embedding_dim].
-            # Creiamo un "mini-batch" di dimensione 1 per ogni utente.
-            # Shape: [num_items, embedding_dim] -> [num_items, 1, embedding_dim]
-            seq_input = item_embeddings.unsqueeze(1)
-            
-            # 1. SELF-ATTENTION
-            # In self-attention, Query, Key e Value sono lo stesso input.
-            # L'output è la sequenza contestualizzata.
-            contextualized_seq, _ = self.attention(
-                query=seq_input, 
-                key=seq_input, 
-                value=seq_input
-            )
-            
-            # Applichiamo un residual connection e layer normalization (standard nei Transformer)
-            # e rimuoviamo la dimensione del "mini-batch"
-            contextualized_embeddings = self.layer_norm(item_embeddings + contextualized_seq.squeeze(1))
-            
-            # 2. AGGREGAZIONE (POOLING)
-            # Calcoliamo la media degli embedding contestualizzati per ottenere
-            # il singolo embedding finale per l'utente.
-            user_embedding = torch.mean(contextualized_embeddings, dim=0)
-            
-            user_embeddings.append(user_embedding)
-            
-        return torch.stack(user_embeddings)
-class AttentionUserEmbedding(nn.Module):
-    """
-    Versione modificata che gestisce un batch di cronologie utenti 
-    di lunghezza variabile usando padding e masking.
-    """
-    def __init__(self, embedding_dim):
-        super().__init__()
-        self.embedding_dim = embedding_dim
-        self.attention_net = nn.Linear(embedding_dim, 1, bias=False)
-
-    def forward(self, item_embeddings_list: list[torch.Tensor]) -> torch.Tensor:
-        """
-        Args:
-            item_embeddings_list (list[torch.Tensor]): Una lista di tensori.
-                Ogni tensore ha shape [num_items_per_user, embedding_dim].
-
-        Returns:
-            torch.Tensor: Un tensore di user embeddings aggregati di shape 
+            torch.Tensor: Un tensor de embeddings de usuario agregados de shape
                           [batch_size, embedding_dim].
         """
-        lengths = torch.tensor([len(seq) for seq in item_embeddings_list], device=self.attention_net.weight.device)
-        
+        # 1. Padding y creación de la máscara
         padded_embeddings = pad_sequence(item_embeddings_list, batch_first=True, padding_value=0.0)
-        
+        # padded_embeddings tiene shape [batch_size, max_len, embedding_dim]
+
+        lengths = torch.tensor([len(seq) for seq in item_embeddings_list], device=padded_embeddings.device)
         max_len = padded_embeddings.size(1)
-        mask = torch.arange(max_len, device=lengths.device)[None, :] < lengths[:, None]
-
-        attention_scores = self.attention_net(padded_embeddings) 
-
-        attention_scores.masked_fill_(~mask.unsqueeze(-1), -float('inf'))
-
-        attention_weights = F.softmax(attention_scores, dim=1)
-
-        user_embeddings = torch.sum(attention_weights * padded_embeddings, dim=1)
         
-        return user_embeddings
+        # Máscara para ignorar el padding en el mecanismo de atención
+        # True para las posiciones que deben ser ignoradas (padding)
+        src_key_padding_mask = torch.arange(max_len, device=lengths.device)[None, :] >= lengths[:, None]
+
+        # 2. Añadir encoding posicional
+        x = self.pos_encoder(padded_embeddings)
+        
+        # 3. Aplicar el Transformer Encoder
+        transformer_output = self.transformer_encoder(
+            src=x,
+            src_key_padding_mask=src_key_padding_mask
+        )
+        # transformer_output tiene shape [batch_size, max_len, embedding_dim]
+        
+        # 4. Agregar la salida
+        # Enmascaramos las salidas de padding a cero antes de promediar
+        mask = ~src_key_padding_mask.unsqueeze(-1)
+        transformer_output = transformer_output.masked_fill(~mask, 0.0)
+        
+        # Promediamos los embeddings de salida (solo sobre las partes sin padding)
+        sum_embeddings = transformer_output.sum(dim=1)
+        # Añadimos 1e-9 para evitar la división por cero
+        user_embeddings = sum_embeddings / (lengths.unsqueeze(1) + 1e-9)
+        
+        return self.layer_norm(user_embeddings)
+
     
 class TwoTowerRecommender(nn.Module, BaseMatrixFactorizationRecommender):
     """
@@ -126,7 +128,7 @@ class TwoTowerRecommender(nn.Module, BaseMatrixFactorizationRecommender):
 
         self.n_users = num_users
         self.n_items = num_items
-        self.aggregation_model = AttentionUserEmbedding(embedding_dim=user_embeddings[0].shape[1])
+        self.aggregation_model = TransformerUserEmbedding(embedding_dim=user_embeddings[0].shape[1], num_heads=2, num_layers=8, dim_feedforward=user_embeddings[0].shape[1] * 2, dropout=0.1)
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
         else:
