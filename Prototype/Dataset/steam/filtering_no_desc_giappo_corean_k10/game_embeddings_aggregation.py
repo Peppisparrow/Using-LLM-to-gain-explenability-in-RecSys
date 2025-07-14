@@ -23,14 +23,14 @@ def calculate_user_embeddings():
     print(" Fase 1/4: Caricamento dei file...")
     
     # Usa il nome corretto del tuo file di embedding
-    with np.load('game_embeddings_e5.npz') as data:
+    with np.load('game_embeddings_t5.npz') as data:
         embeddings_df = pd.DataFrame({
             'app_id': data['item_id'],
             'embedding': list(data['embeddings'])
         })
     embeddings_df['app_id'] = embeddings_df['app_id'].astype(np.uint32)
 
-    interactions_df = pd.read_csv('mid/train_recommendations.csv', dtype={'user_id': np.uint32, 'app_id': np.uint32})
+    interactions_df = pd.read_csv('small/train_recommendations.csv', dtype={'user_id': np.uint32, 'app_id': np.uint32})
     
     print(f"   - Trovati {len(embeddings_df)} embedding di giochi.")
     print(f"   - Trovate {len(interactions_df)} interazioni utente-gioco.")
@@ -62,7 +62,7 @@ def calculate_user_embeddings():
     final_embeddings = np.stack(user_embeddings_series.values)
 
     np.savez_compressed(
-        'mid/game_embeddings_e5_USER.npz',
+        'small/game_embeddings_t5_MATRIX_USER.npz',
         user_id=user_ids,
         embeddings=final_embeddings
     )
