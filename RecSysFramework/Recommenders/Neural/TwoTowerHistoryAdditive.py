@@ -6,67 +6,7 @@ from tqdm import tqdm
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 from RecSysFramework.Recommenders.BaseMatrixFactorizationRecommender import BaseMatrixFactorizationRecommender
-class SelfAttentionAggregator(nn.Module):
-    """
-    Aggrega una sequenza di item embeddings usando un blocco di self-attention
-    seguito da un'operazione di pooling.
-    """
-    def __init__(self, embedding_dim: int, num_heads: int = 4, dropout: float = 0.1):
-        """
-        Args:
-            embedding_dim (int): Dimensione degli embeddings. Deve essere divisibile per num_heads.
-            num_heads (int): Numero di "teste" per la multi-head attention.
-            dropout (float): Probabilità di dropout.
-        """
-        super().__init__()
-        
-        # Il modulo standard di PyTorch per la multi-head self-attention.
-        self.attention = nn.MultiheadAttention(
-            embed_dim=embedding_dim,
-            num_heads=num_heads,
-            dropout=dropout,
-            batch_first=False  # Ci aspettiamo input come [seq_len, batch, dim]
-        )
-        # Layer Normalization per stabilizzare l'addestramento
-        self.layer_norm = nn.LayerNorm(embedding_dim)
 
-    def forward(self, item_embeddings_list: list[torch.Tensor]) -> torch.Tensor:
-        """
-        Args:
-            item_embeddings_list (list[torch.Tensor]): Lista di tensori, dove
-                ogni tensore ha shape [num_items, embedding_dim].
-
-        Returns:
-            torch.Tensor: Un tensore di user embeddings di shape [batch_size, embedding_dim].
-        """
-        user_embeddings = []
-        for item_embeddings in item_embeddings_list:
-            # Il modulo di attention si aspetta [seq_len, batch_size, embedding_dim].
-            # Creiamo un "mini-batch" di dimensione 1 per ogni utente.
-            # Shape: [num_items, embedding_dim] -> [num_items, 1, embedding_dim]
-            seq_input = item_embeddings.unsqueeze(1)
-            
-            # 1. SELF-ATTENTION
-            # In self-attention, Query, Key e Value sono lo stesso input.
-            # L'output è la sequenza contestualizzata.
-            contextualized_seq, _ = self.attention(
-                query=seq_input, 
-                key=seq_input, 
-                value=seq_input
-            )
-            
-            # Applichiamo un residual connection e layer normalization (standard nei Transformer)
-            # e rimuoviamo la dimensione del "mini-batch"
-            contextualized_embeddings = self.layer_norm(item_embeddings + contextualized_seq.squeeze(1))
-            
-            # 2. AGGREGAZIONE (POOLING)
-            # Calcoliamo la media degli embedding contestualizzati per ottenere
-            # il singolo embedding finale per l'utente.
-            user_embedding = torch.mean(contextualized_embeddings, dim=0)
-            
-            user_embeddings.append(user_embedding)
-            
-        return torch.stack(user_embeddings)
 class AttentionUserEmbedding(nn.Module):
     """
     Versione modificata che gestisce un batch di cronologie utenti 
