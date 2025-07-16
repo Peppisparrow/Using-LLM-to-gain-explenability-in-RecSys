@@ -10,12 +10,10 @@ from implicit.evaluation import ranking_metrics_at_k
 from implicit.als import AlternatingLeastSquares
 # Defining Recommender
 from RecSysFramework.Recommenders.Neural.TwoTowerMultipleStrategy import TwoTowerRecommender
-from Prototype.data_manager_peppe2 import DataManger
+from Prototype.data_manager import DataManger
 from Prototype.utils.optuna_utils import SaveResults
-from RecSysFramework.Evaluation.Evaluator import EvaluatorHoldout
+
 # ---------- CONSTANTS ----------
-# METRIC = 'MAP'
-# METRIC_K = 10
 BASE_OPTUNA_FOLDER = Path("Prototype/optuna/")
 # STUDY_NAME = "2Tower_product_norm_prototype"
 # DATA_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10')

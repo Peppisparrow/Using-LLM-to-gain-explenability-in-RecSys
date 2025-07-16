@@ -11,15 +11,9 @@ from implicit.evaluation import ranking_metrics_at_k
 from implicit.als import AlternatingLeastSquares
 
 from RecSysFramework.Recommenders.Neural.TwoTower import TwoTowerRecommender
-from Prototype.data_manager_peppe import DataManger
+from Prototype.data_manager import DataManger
 from Prototype.utils.optuna_utils import SaveResults
-from RecSysFramework.Evaluation.Evaluator import EvaluatorHoldout
-from Prototype.Decoder.ItemFactorLearner_implicit import ImplicitItemFactorLearner
-# import cProfile
-# import pstats
-# import io
-# Current layers: [256 192 128  64   1]
-# Current parameters: epochs=10, batch_size=2048, learning_rate=0.001, weight_decay=1e-05, layers=[256 192 128  64   1]
+
 # ---------- CONSTANTS ----------
 BASE_OPTUNA_FOLDER = Path("Prototype/optuna/")
 # STUDY_NAME = "Provailnuovobimbo"

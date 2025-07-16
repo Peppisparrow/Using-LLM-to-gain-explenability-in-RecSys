@@ -10,9 +10,9 @@ from implicit.evaluation import ranking_metrics_at_k
 from implicit.als import AlternatingLeastSquares
 # Defining Recommender
 from RecSysFramework.Recommenders.Neural.TwoTower import TwoTowerRecommender
-from Prototype.data_manager_peppe import DataManger
+from Prototype.data_manager import DataManger
 from Prototype.utils.optuna_utils import SaveResults
-from RecSysFramework.Evaluation.Evaluator import EvaluatorHoldout
+
 # ---------- CONSTANTS ----------
 BASE_OPTUNA_FOLDER = Path("Prototype/optuna/")
 # STUDY_NAME = "2Tower_product_norm_prototype"
