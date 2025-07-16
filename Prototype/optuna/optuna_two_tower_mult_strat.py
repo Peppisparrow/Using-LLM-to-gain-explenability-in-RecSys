@@ -86,15 +86,10 @@ def main():
     data_manager = DataManger(data_path=DATA_PATH, user_embedding_path=USER_EMBEDDING_PATH, item_embeddings_path=ITEM_EMBEDDING_PATH)
     URM_train = data_manager.get_URM_train()
     URM_test = data_manager.get_URM_test()
-    if USER_EMBEDDING_PATH is not None:
-        print("Loading user embeddings from path:", USER_EMBEDDING_PATH)
-        user_embeddings = data_manager.get_user_embeddings()
-    else:
-        user_embeddings = None
-    if ITEM_EMBEDDING_PATH is not None:
-        item_embeddings = data_manager.get_item_embeddings()
-    else:
-        item_embeddings = None
+    
+    user_embeddings = data_manager.get_user_embeddings() if USER_EMBEDDING_PATH else None
+    item_embeddings = data_manager.get_item_embeddings() if ITEM_EMBEDDING_PATH else None
+
     objective_function_with_data = partial(
         objective_function,
         URM_train=URM_train,
