@@ -16,8 +16,6 @@ from Prototype.utils.optuna_utils import SaveResults
 
 
 # ---------- CONSTANTS ----------
-METRIC = 'map'
-METRIC_K = 10
 BASE_OPTUNA_FOLDER = Path("Prototype/optuna/")
 # ---------- /CONSTANTS ----------
 
@@ -106,6 +104,8 @@ if __name__ == "__main__":
     parser.add_argument("--user_embedding_path", type=str, help="Path to the user embeddings file")
     parser.add_argument("--item_embedding_path", type=str, help="Path to the item embeddings file")
     parser.add_argument("--db_path", type=str, help="Path to the database file", default="Prototype/optuna/optuna_study.db")
+    parser.add_argument("--metric", type=str, help="Metric to optimize", default='map')
+    parser.add_argument("--metric_k", type=int, help="K value for the metric", default=10)
     args = parser.parse_args()
     
     
@@ -114,7 +114,12 @@ if __name__ == "__main__":
     USER_EMBEDDING_PATH = Path(args.user_embedding_path)
     ITEM_EMBEDDING_PATH = Path(args.item_embedding_path)
     DB_PATH = args.db_path
-    
+
+    METRIC = args.metric
+    METRIC_K = args.metric_k
+
     print(f"Running study: {STUDY_NAME} with data path: {DATA_PATH} and user embedding path: {USER_EMBEDDING_PATH}")
+    print(f"Item embedding path: {ITEM_EMBEDDING_PATH} and database path: {DB_PATH}")
+    print(f"Evaluation with implicit backend using metric: {METRIC} at K: {METRIC_K}")
     
     main()
