@@ -25,7 +25,7 @@ BASE_OPTUNA_FOLDER = Path("Prototype/optuna/")
 
 def objective_function(trial, URM_train, URM_test, item_embeddings=None, user_embeddings=None):
 
-    epochs = trial.suggest_int("epochs", 1, 10)
+    epochs = trial.suggest_int("epochs", 1, 40)
     batch_size = trial.suggest_int("batch_size", 512, 4096)
     learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
@@ -41,6 +41,7 @@ def objective_function(trial, URM_train, URM_test, item_embeddings=None, user_em
     optimizer = torch.optim.AdamW(params=recommender.parameters(), lr=learning_rate, weight_decay=weight_decay, fused=True)
     print("Optimizer initialized.")
     recommender = torch.compile(recommender)
+    
     recommender.fit(epochs=epochs, batch_size=batch_size, optimizer=optimizer)
     print("Recommender fitted.")
     recommender.compute_all_embeddings(batch_size=batch_size)
@@ -65,9 +66,9 @@ def objective_function(trial, URM_train, URM_test, item_embeddings=None, user_em
         URM_train,
         URM_test,
         K=METRIC_K,
-    )['map']
-    
-    print(f"MAP@{METRIC_K} from implicit: {result_imp:.6f}")
+    )[METRIC]
+
+    print(f"{METRIC}@{METRIC_K} from implicit: {result_imp:.6f}")
     return result_imp
 
 def main():
@@ -105,20 +106,22 @@ if __name__ == "__main__":
     parser.add_argument("--data_path", type=str, help="Path to the dataset with train and test csv files")
     parser.add_argument("--user_embedding_path", type=str, help="Path to the user embeddings file", default=None)
     parser.add_argument("--item_embedding_path", type=str, help="Path to the item embeddings file", default=None)
+    parser.add_argument("--db_path", type=str, help="Path to the database file", default="Prototype/optuna/optuna_study.db")
+    parser.add_argument("--metric", type=str, help="Metric to optimize", default='map')
+    parser.add_argument("--metric_k", type=int, help="K value for the metric", default=10)
     args = parser.parse_args()
     
     
     STUDY_NAME = args.study_name
     DATA_PATH = Path(args.data_path)
-    if args.user_embedding_path is not None:
-        USER_EMBEDDING_PATH = Path(args.user_embedding_path)
-    else:
-        USER_EMBEDDING_PATH = None
-    if args.item_embedding_path is not None:
-        ITEM_EMBEDDING_PATH = Path(args.item_embedding_path)
-    else:
-        ITEM_EMBEDDING_PATH = None
+    USER_EMBEDDING_PATH = Path(args.user_embedding_path) if args.user_embedding_path else None
+    ITEM_EMBEDDING_PATH = Path(args.item_embedding_path) if args.item_embedding_path else None
+    DB_PATH = args.db_path
+    
+    METRIC = args.metric
+    METRIC_K = args.metric_k
     
     print(f"Running study: {STUDY_NAME} with data path: {DATA_PATH} and user embedding path: {USER_EMBEDDING_PATH}")
+    
     
     main()

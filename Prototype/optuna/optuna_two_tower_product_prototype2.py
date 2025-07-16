@@ -14,8 +14,6 @@ from Prototype.data_manager_peppe import DataManger
 from Prototype.utils.optuna_utils import SaveResults
 from RecSysFramework.Evaluation.Evaluator import EvaluatorHoldout
 # ---------- CONSTANTS ----------
-METRIC = 'MAP'
-METRIC_K = 10
 BASE_OPTUNA_FOLDER = Path("Prototype/optuna/")
 # STUDY_NAME = "2Tower_product_norm_prototype"
 # DATA_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10')
@@ -25,7 +23,7 @@ BASE_OPTUNA_FOLDER = Path("Prototype/optuna/")
 
 def objective_function(trial, URM_train, URM_test, item_embeddings=None, user_embeddings=None):
 
-    epochs = trial.suggest_int("epochs", 1, 10)
+    epochs = trial.suggest_int("epochs", 1, 40)
     batch_size = trial.suggest_int("batch_size", 512, 4096)
     learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
@@ -65,24 +63,18 @@ def objective_function(trial, URM_train, URM_test, item_embeddings=None, user_em
         URM_train,
         URM_test,
         K=METRIC_K,
-    )['map']
-    
-    print(f"MAP@{METRIC_K} from implicit: {result_imp:.6f}")
+    )[METRIC]
+
+    print(f"{METRIC}@{METRIC_K} from implicit: {result_imp:.6f}")
     return result_imp
 
 def main():
     data_manager = DataManger(data_path=DATA_PATH, user_embedding_path=USER_EMBEDDING_PATH, item_embeddings_path=ITEM_EMBEDDING_PATH)
     URM_train = data_manager.get_URM_train()
     URM_test = data_manager.get_URM_test()
-    if USER_EMBEDDING_PATH is not None:
-        print("Loading user embeddings from path:", USER_EMBEDDING_PATH)
-        user_embeddings = data_manager.get_user_embeddings()
-    else:
-        user_embeddings = None
-    if ITEM_EMBEDDING_PATH is not None:
-        item_embeddings = data_manager.get_item_embeddings()
-    else:
-        item_embeddings = None
+    user_embeddings = data_manager.get_user_embeddings() if USER_EMBEDDING_PATH else None
+    item_embeddings = data_manager.get_item_embeddings() if ITEM_EMBEDDING_PATH else None
+    
     objective_function_with_data = partial(
         objective_function,
         URM_train=URM_train,
@@ -90,9 +82,9 @@ def main():
         item_embeddings=item_embeddings,
         user_embeddings=user_embeddings
     )
-        
-    optuna_study = optuna.create_study(direction="maximize", study_name=STUDY_NAME, load_if_exists=True, storage="sqlite:///Prototype/optuna/optuna_study.db", sampler=optuna.samplers.TPESampler(seed=43))
-            
+
+    optuna_study = optuna.create_study(direction="maximize", study_name=STUDY_NAME, load_if_exists=True, storage=f"sqlite:///{DB_PATH}", sampler=optuna.samplers.TPESampler(seed=43))
+
     save_results = SaveResults(csv_path=BASE_OPTUNA_FOLDER / f"logs/{STUDY_NAME}/trials_results.csv")
 
     optuna_study.optimize(objective_function_with_data,
@@ -105,20 +97,23 @@ if __name__ == "__main__":
     parser.add_argument("--data_path", type=str, help="Path to the dataset with train and test csv files")
     parser.add_argument("--user_embedding_path", type=str, help="Path to the user embeddings file", default=None)
     parser.add_argument("--item_embedding_path", type=str, help="Path to the item embeddings file", default=None)
+    parser.add_argument("--db_path", type=str, help="Path to the database file", default="Prototype/optuna/optuna_study.db")
+    parser.add_argument("--metric", type=str, help="Metric to optimize", default='map')
+    parser.add_argument("--metric_k", type=int, help="K value for the metric", default=10)
     args = parser.parse_args()
     
     
     STUDY_NAME = args.study_name
     DATA_PATH = Path(args.data_path)
-    if args.user_embedding_path is not None:
-        USER_EMBEDDING_PATH = Path(args.user_embedding_path)
-    else:
-        USER_EMBEDDING_PATH = None
-    if args.item_embedding_path is not None:
-        ITEM_EMBEDDING_PATH = Path(args.item_embedding_path)
-    else:
-        ITEM_EMBEDDING_PATH = None
+    USER_EMBEDDING_PATH = Path(args.user_embedding_path) if args.user_embedding_path else None
+    ITEM_EMBEDDING_PATH = Path(args.item_embedding_path) if args.item_embedding_path else None
+    
+    DB_PATH = args.db_path
+    METRIC = args.metric
+    METRIC_K = args.metric_k
     
     print(f"Running study: {STUDY_NAME} with data path: {DATA_PATH} and user embedding path: {USER_EMBEDDING_PATH}")
+    print(f"Item embedding path: {ITEM_EMBEDDING_PATH} and database path: {DB_PATH}")
+    print(f"Metric: {METRIC} with K={METRIC_K}")
     
     main()

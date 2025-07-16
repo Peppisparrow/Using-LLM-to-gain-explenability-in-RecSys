@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 import os
 from functools import partial
 from pathlib import Path
@@ -20,12 +21,11 @@ from Prototype.Decoder.ItemFactorLearner_implicit import ImplicitItemFactorLearn
 # Current layers: [256 192 128  64   1]
 # Current parameters: epochs=10, batch_size=2048, learning_rate=0.001, weight_decay=1e-05, layers=[256 192 128  64   1]
 # ---------- CONSTANTS ----------
-METRIC = 'MAP_MIN_DEN'
-METRIC_K = 10
 BASE_OPTUNA_FOLDER = Path("Prototype/optuna/")
-STUDY_NAME = "Provailnuovobimbo"
-DATA_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/small')
-USER_EMBEDDING_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/small/user_embeddings_compressed_t5.npz')
+# STUDY_NAME = "Provailnuovobimbo"
+# DATA_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/small')
+# USER_EMBEDDING_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/small/user_embeddings_compressed_t5.npz')
+
 def calculate_map_at_k_manual(model, urm_train, urm_test, k):
         """
         Calcola manualmente la MAP@K, replicando la logica di un valutatore standard.
@@ -72,7 +72,7 @@ def calculate_map_at_k_manual(model, urm_train, urm_test, k):
 
 def objective_function(trial, URM_train, URM_test):
 
-    epochs = trial.suggest_int("epochs", 5, 10)
+    epochs = trial.suggest_int("epochs", 5, 40)
     batch_size = trial.suggest_int("batch_size", 512, 4096)
     learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-3, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
@@ -91,7 +91,7 @@ def objective_function(trial, URM_train, URM_test):
     optimizer = torch.optim.AdamW(params=recommender.parameters(), lr=learning_rate, weight_decay=weight_decay, fused=True)
     print("Optimizer initialized.")
     recommender = torch.compile(recommender)
-    recommender.fit(epochs=1, batch_size=batch_size, optimizer=optimizer)
+    recommender.fit(epochs=epochs, batch_size=batch_size, optimizer=optimizer)
     print("Recommender fitted.")
     recommender.compute_all_embeddings(batch_size=batch_size)
 
@@ -115,70 +115,11 @@ def objective_function(trial, URM_train, URM_test):
         URM_train,
         URM_test,
         K=METRIC_K,
-    )['map']
+    )[METRIC]
     
-    evaluator_test = EvaluatorHoldout(URM_test, cutoff_list=[METRIC_K], verbose=True, exclude_seen=True)
-    result_dict, _ = evaluator_test.evaluateRecommender(recommender)
-    result = result_dict.loc[METRIC_K][METRIC]
-
-    rec = ImplicitItemFactorLearner(URM_train)
-    rec.USER_factors = recommender.USER_factors
-    rec.ITEM_factors = recommender.ITEM_factors
-
-    evaluator_test = EvaluatorHoldout(URM_test, cutoff_list=[METRIC_K], verbose=False, exclude_seen=True)
-    result_dict, _ = evaluator_test.evaluateRecommender(rec)
-    map_from_evaluator = result_dict.loc[METRIC_K]['MAP_MIN_DEN']
-    print(f"MAP@{METRIC_K} from EvaluatorHoldout on ials: {map_from_evaluator:.6f}")
-    print(f"MAP@{METRIC_K} from EvaluatorHoldout on twotower: {result:.6f}")
-    print(f"MAP@{METRIC_K} from implicit: {result_imp:.6f}")
-
-
-
-    if URM_test.nnz > 0:
-        user_id_test = URM_test.nonzero()[0][0]
-        print(f"Utente selezionato per il test: user_id = {user_id_test}\n")
-
-        # 1. Raccomandazioni dal modello ORIGINALE 'implicit'
-        # Questo è il nostro riferimento corretto.
-        original_recs, original_scores = fake_model.recommend(
-            userid=user_id_test,
-            user_items=URM_train[user_id_test],
-            N=METRIC_K,
-            filter_already_liked_items=True
-        )
-
-        print(f"--- Raccomandazioni da modello 'implicit' (corretto) ---")
-        for i, (item, score) in enumerate(zip(original_recs, original_scores)):
-            print(f"  {i+1}. Item: {item:<5} Score: {score:.4f}")
-        print("-" * 25)
-
-        # 2. Raccomandazioni dal tuo recommender custom 'ImplicitItemFactorLearner'
-        # Assumiamo che abbia un metodo .recommend() con una firma simile
-        
-        custom_recs, custom_score = recommender.recommend(
-            user_id_array=user_id_test, 
-            cutoff=10,    
-            remove_seen_flag=True, # Assicurati che il tuo metodo supporti questo
-            return_scores=True  # Assicurati che il tuo metodo supporti questo
-        )
-        # Ora custom_recs e custom_scores sono semplici array, non matrici
-        for i, item_id in enumerate(custom_recs):
-            score = custom_score[0, item_id]
-            
-            print(f"  {i+1}. Item: {item_id:<5} Score: {score}")
-
-        print("-" * 25)
-
-        # 3. Confronto
-        are_recs_identical = np.array_equal(original_recs, custom_recs)
-        if are_recs_identical:
-            print("✅ RISULTATO: Le liste di raccomandazioni sono IDENTICHE.")
-            print("🐛 Il bug è quasi sicuramente nella classe 'EvaluatorHoldout'.")
-        else:
-            print("❌ RISULTATO: Le liste di raccomandazioni sono DIVERSE.")
-            print("🐛 Il bug è quasi sicuramente nel metodo .recommend() della tua classe 'ImplicitItemFactorLearner'.")
-    return result
-
+    print(f"{METRIC}@{METRIC_K} from implicit: {result_imp:.6f}")
+    
+    
 def main():
     data_manager = DataManger(data_path=DATA_PATH, user_embedding_path=USER_EMBEDDING_PATH)
     URM_train = data_manager.get_URM_train()
@@ -199,4 +140,27 @@ def main():
                         n_trials = 1)
 
 if __name__ == "__main__":
+    parser = ArgumentParser(description="Run Optuna study for ImplicitUserFactorLearner")
+    parser.add_argument("--study_name", type=str, help="Name of the Optuna study")
+    parser.add_argument("--data_path", type=str, help="Path to the dataset with train and test csv files")
+    parser.add_argument("--user_embedding_path", type=str, help="Path to the user embeddings file")
+    parser.add_argument("--item_embedding_path", type=str, help="Path to the item embeddings file")
+    parser.add_argument("--db_path", type=str, help="Path to the database file", default="Prototype/optuna/optuna_study.db")
+    parser.add_argument("--metric", type=str, help="Metric to optimize", default='map')
+    parser.add_argument("--metric_k", type=int, help="K value for the metric", default=10)
+    args = parser.parse_args()
+    
+    
+    STUDY_NAME = args.study_name
+    DATA_PATH = Path(args.data_path)
+    USER_EMBEDDING_PATH = Path(args.user_embedding_path)
+    ITEM_EMBEDDING_PATH = Path(args.item_embedding_path)
+    DB_PATH = args.db_path
+
+    METRIC = args.metric
+    METRIC_K = args.metric_k
+
+    print(f"Running study: {STUDY_NAME} with data path: {DATA_PATH} and user embedding path: {USER_EMBEDDING_PATH}")
+    print(f"Item embedding path: {ITEM_EMBEDDING_PATH} and database path: {DB_PATH}")
+    print(f"Evaluation with implicit backend using metric: {METRIC} at K: {METRIC_K}")
     main()
