@@ -15,13 +15,14 @@ class TwoTowerRecommender(nn.Module, BaseMatrixFactorizationRecommender):
     """
     RECOMMENDER_NAME = "TwoTowerRecommender"
     def __init__(self, 
-                 URM_train, 
-                 num_users, 
-                 num_items, 
-                 layers=[10], 
-                 user_embeddings=None,
-                 item_embeddings=None,
-                 verbose=True):
+                URM_train, 
+                num_users, 
+                num_items, 
+                layers=[10], 
+                user_embeddings=None,
+                item_embeddings=None,
+                dropout=0.1,
+                verbose=True):
         
         super().__init__()
         BaseMatrixFactorizationRecommender.__init__(self, URM_train, verbose)
@@ -63,20 +64,21 @@ class TwoTowerRecommender(nn.Module, BaseMatrixFactorizationRecommender):
             item_tower_input_dim = layers[0] if len(layers) > 0 else user_tower_input_dim
             self.item_embedding = nn.Embedding(self.n_items, item_tower_input_dim)
 
-        self.user_tower = self._create_tower(user_tower_input_dim, layers)
-        self.item_tower = self._create_tower(item_tower_input_dim, layers)
+        self.user_tower = self._create_tower(user_tower_input_dim, layers, dropout)
+        self.item_tower = self._create_tower(item_tower_input_dim, layers, dropout)
         
         self.to(self.device)
         self.USER_factors = None
         self.ITEM_factors = None
 
-    def _create_tower(self, input_dim, hidden_layers):
+    def _create_tower(self, input_dim, hidden_layers, dropout=0.1):
         layers = []
         current_dim = input_dim
         for layer_dim in hidden_layers:
             layers.append(nn.Linear(current_dim, layer_dim))
             layers.append(nn.BatchNorm1d(layer_dim))
             layers.append(nn.ReLU())
+            layers.append(nn.Dropout(dropout))
             current_dim = layer_dim
         return nn.Sequential(*layers)
 
