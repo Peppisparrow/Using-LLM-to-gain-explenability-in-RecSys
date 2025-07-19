@@ -99,3 +99,8 @@ class ImplicitALSRecommender(BaseMatrixFactorizationRecommender):
         else:
             self.USER_factors = self.model.user_factors
             self.ITEM_factors = self.model.item_factors
+        
+    def _compute_item_score(self, user_id_array, items_to_compute = None):
+
+        item_scores = self.USER_factors[user_id_array] @ self.ITEM_factors.T
+        return item_scores
