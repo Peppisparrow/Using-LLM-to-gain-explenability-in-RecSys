@@ -78,3 +78,8 @@ class ImplicitUserFactorLearner(BaseMatrixFactorizationRecommender):
         self.USER_factors = user_factors_gpu.to_numpy()
         
         print("User factors learned successfully using the implicit GPU backend.")
+    
+    def _compute_item_score(self, user_id_array, items_to_compute = None):
+
+        item_scores = self.USER_factors[user_id_array] @ self.ITEM_factors.T
+        return item_scores
