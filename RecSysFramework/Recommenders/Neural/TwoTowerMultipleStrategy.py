@@ -22,8 +22,8 @@ class TwoTowerRecommender(nn.Module, BaseMatrixFactorizationRecommender):
                  layers=[10], 
                  user_embeddings=None,
                  item_embeddings=None,
-                 user_embedding_mode='learnable_only',  # 'learnable_only', 'pretrained_only', 'mixed'
-                 item_embedding_mode='learnable_only',  # 'learnable_only', 'pretrained_only', 'mixed'
+                 user_embedding_mode='mixed',  # 'learnable_only', 'pretrained_only', 'mixed'
+                 item_embedding_mode='mixed',  # 'learnable_only', 'pretrained_only', 'mixed'
                  fusion_strategy='concatenate',  # 'concatenate', 'add', 'weighted_sum', 'gated'
                  learnable_embedding_dim=None,  # If None, uses layers[0]
                  verbose=True,
@@ -140,6 +140,48 @@ class TwoTowerRecommender(nn.Module, BaseMatrixFactorizationRecommender):
         else:
             raise ValueError(f"Modalità item non supportata: {self.item_embedding_mode}")
 
+    # def _setup_fusion_components(self, entity_type, learnable_dim, pretrained_dim):
+    #     """Setup fusion components for mixed embedding mode"""
+    #     if self.fusion_strategy == 'concatenate':
+    #         self._print(f"Strategia di fusione {entity_type}: concatenazione")
+    #         return learnable_dim + pretrained_dim
+            
+    #     elif self.fusion_strategy == 'add':
+    #         if learnable_dim != pretrained_dim:
+    #             self._print(f"Strategia di fusione {entity_type}: somma con proiezione")
+    #             # Create projection layer to match dimensions
+    #             projection_layer = nn.Linear(pretrained_dim, learnable_dim)
+    #             setattr(self, f'{entity_type}_pretrained_projection', projection_layer)
+    #         else:
+    #             self._print(f"Strategia di fusione {entity_type}: somma diretta")
+    #         return learnable_dim
+            
+    #     elif self.fusion_strategy == 'weighted_sum':
+    #         self._print(f"Strategia di fusione {entity_type}: somma pesata")
+    #         # Create learnable weights
+    #         weight_layer = nn.Parameter(torch.tensor([0.5, 0.5]))
+    #         setattr(self, f'{entity_type}_fusion_weights', weight_layer)
+    #         if learnable_dim != pretrained_dim:
+    #             projection_layer = nn.Linear(pretrained_dim, learnable_dim)
+    #             setattr(self, f'{entity_type}_pretrained_projection', projection_layer)
+    #         return learnable_dim
+            
+    #     elif self.fusion_strategy == 'gated':
+    #         self._print(f"Strategia di fusione {entity_type}: gating")
+    #         # Create gating mechanism
+    #         gate_dim = learnable_dim + pretrained_dim
+    #         gate_layer = nn.Sequential(
+    #             nn.Linear(gate_dim, gate_dim // 2),
+    #             nn.ReLU(),
+    #             nn.Linear(gate_dim // 2, learnable_dim),
+    #             nn.Sigmoid()
+    #         )
+    #         setattr(self, f'{entity_type}_gate', gate_layer)
+    #         return learnable_dim
+            
+    #     else:
+    #         raise ValueError(f"Strategia di fusione non supportata: {self.fusion_strategy}")
+        
     def _setup_fusion_components(self, entity_type, learnable_dim, pretrained_dim):
         """Setup fusion components for mixed embedding mode"""
         if self.fusion_strategy == 'concatenate':
@@ -169,18 +211,27 @@ class TwoTowerRecommender(nn.Module, BaseMatrixFactorizationRecommender):
         elif self.fusion_strategy == 'gated':
             self._print(f"Strategia di fusione {entity_type}: gating")
             # Create gating mechanism
-            gate_dim = learnable_dim + pretrained_dim
+            # The gate input dimension should account for both embeddings
+            # After projection, both embeddings will have learnable_dim size
+            gate_input_dim = learnable_dim + learnable_dim  # Both will be projected to learnable_dim
             gate_layer = nn.Sequential(
-                nn.Linear(gate_dim, gate_dim // 2),
+                nn.Linear(gate_input_dim, gate_input_dim // 2),
                 nn.ReLU(),
-                nn.Linear(gate_dim // 2, learnable_dim),
+                nn.Linear(gate_input_dim // 2, learnable_dim),
                 nn.Sigmoid()
             )
             setattr(self, f'{entity_type}_gate', gate_layer)
-            return learnable_dim
             
+            # Pre-create projection layer if dimensions don't match
+            if learnable_dim != pretrained_dim:
+                projection_layer = nn.Linear(pretrained_dim, learnable_dim)
+                setattr(self, f'{entity_type}_pretrained_projection_gated', projection_layer)
+            
+            return learnable_dim
+        
         else:
             raise ValueError(f"Strategia di fusione non supportata: {self.fusion_strategy}")
+
 
     def _fuse_embeddings(self, learnable_emb, pretrained_emb, entity_type):
         """Fuse learnable and pretrained embeddings based on fusion strategy"""

@@ -168,7 +168,7 @@ class _BaseLightFMWrapper(BaseRecommender, Incremental_Training_Early_Stopping):
                                                             user_features = self.UCM_train,
                                                             epochs = 1,
                                                             num_threads = self.num_threads,
-                                                            verbose = False)
+                                                            verbose = True)
 
 
 

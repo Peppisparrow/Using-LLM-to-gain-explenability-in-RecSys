@@ -3,10 +3,10 @@ import os
 
 # --- Configuration ---
 # The name of the study to delete
-study_name = "TwoTowerProd_BIG_steam_HIST_USER_ITEM_embs_MXBAI"
+study_name = "ItemFactorLearner_map10"
 # The path to your Optuna database file
-db_path = "/leonardo_work/IscrC_DMG4RS/embednbreakfast/Using-LLM-to-gain-explenability-in-RecSys/Prototype/optuna/optuna_study.db"
-
+#db_path = "/leonardo_work/IscrC_DMG4RS/embednbreakfast/Using-LLM-to-gain-explenability-in-RecSys/Prototype/optuna/optuna_study.db"
+db_path = "/leonardo_work/IscrC_DMG4RS/embednbreakfast/Using-LLM-to-gain-explenability-in-RecSys/Prototype/optuna/optuna_study_ML_small.db"
 # --- Deletion Logic ---
 
 # First, check if the database file actually exists

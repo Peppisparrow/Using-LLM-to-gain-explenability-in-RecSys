@@ -11,8 +11,8 @@ dest_db_path = "/leonardo_work/IscrC_DMG4RS/embednbreakfast/Using-LLM-to-gain-ex
 
 # 3. Study Names: The original name and the new name for the destination.
 #    If new_study_name is the same as old_study_name, it will be a simple move/copy.
-old_study_name = "TwoTowerProd_BIG_steam_HIST_USER_ITEM_embs_MXBAI"
-new_study_name = "TwoTowerProd_HistUser-Item_embs_MXBAI_MAP10" # Change this to rename the study
+old_study_name = "optuna_two_tower_product_BPR"
+new_study_name = "2T_MeanUser_Item" # Change this to rename the study
 
 # 4. Delete Original: Set to True to delete the study from the source DB after a successful copy.
 #    Set to False to simply copy the study.

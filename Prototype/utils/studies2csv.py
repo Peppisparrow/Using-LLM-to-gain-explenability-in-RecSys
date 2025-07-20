@@ -6,10 +6,10 @@ from datetime import timedelta
 
 # --- Configuration ---
 # 1. Define the path to your Optuna database
-db_path = "/leonardo_work/IscrC_DMG4RS/embednbreakfast/Using-LLM-to-gain-explenability-in-RecSys/Prototype/optuna/DBs/optuna_big_steam.db"
+db_path = "/leonardo_work/IscrC_DMG4RS/embednbreakfast/Using-LLM-to-gain-explenability-in-RecSys/Prototype/optuna/optuna_study_ML_1m.db"
 
 # 2. Define the name for your output CSV file
-output_csv_path = "optuna_studies_analysis_report_with_ranges_BIG.csv"
+output_csv_path = "optuna_studies_analysis_report_with_range_1M.csv"
 
 # --- Helper Function ---
 def get_parameter_ranges(trials, param_names):
