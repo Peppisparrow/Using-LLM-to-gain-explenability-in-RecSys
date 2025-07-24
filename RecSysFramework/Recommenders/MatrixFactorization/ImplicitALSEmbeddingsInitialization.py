@@ -83,10 +83,17 @@ class ImplicitALSRecommender(BaseMatrixFactorizationRecommender):
                                                         num_threads=num_threads,
                                                         random_state=42
                                                         )
-        if item_factors is not None:
-            self.model.item_factors = implicit.gpu.Matrix(item_factors)
-        if user_factors is not None:
-            self.model.user_factors = implicit.gpu.Matrix(user_factors)
+        # if item_factors is not None:
+        #     self.model.item_factors = implicit.gpu.Matrix(item_factors)
+        # if user_factors is not None:
+        #     self.model.user_factors = implicit.gpu.Matrix(user_factors)
+        
+        self.model = self.model.to_cpu() if use_gpu else self.model
+        
+        self.model.item_factors = item_factors if item_factors is not None else self.model.item_factors
+        self.model.user_factors = user_factors if user_factors is not None else self.model.user_factors
+        
+        self.model = self.model.to_gpu() if use_gpu else self.model
 
         C = self._confidence_scaling(**confidence_args)
         

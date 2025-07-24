@@ -10,7 +10,7 @@ import scipy.sparse as sps
 
 # Defining Recommender
 from RecSysFramework.Recommenders.FactorizationMachines.LightFMRecommenderBoosted import LightFMUserItemHybridRecommender
-from Prototype.data_manager import DataManger
+from Prototype.data_manager2 import DataManger
 from Prototype.utils.optuna_utils import SaveResults
 from RecSysFramework.Evaluation.Evaluator import EvaluatorHoldout
 
@@ -29,11 +29,11 @@ def objective_function(trial, user_embeddings, item_embeddings, URM_train, URM_t
     params = {
         "num_threads": recommender.num_threads,
         "epochs": trial.suggest_int("epochs", 1, 100, step=5),
-        "num_components": trial.suggest_int("num_components", 10, 600, step=15),
+        "n_components": trial.suggest_int("n_components", 10, 600, step=15),
         "learning_rate": trial.suggest_float("learning_rate", 0.001, 0.1, log=True),
         "loss": 'bpr',  # explicitly set loss function to 'bpr' (by default is the same)
-        "item_alpha": trial.suggest_float("item_alpha", 0.0, 1.0, log=True),
-        "user_alpha": trial.suggest_float("user_alpha", 0.0, 1.0, log=True),
+        "item_alpha": trial.suggest_float("item_alpha", 0.01, 1.0, log=True),
+        "user_alpha": trial.suggest_float("user_alpha", 0.01, 1.0, log=True),
         # Now early stopping kwargs
         'stop_on_validation': True,
         'validation_every_n': 5,
@@ -55,7 +55,7 @@ def objective_function(trial, user_embeddings, item_embeddings, URM_train, URM_t
     return result
 
 def main():
-    data_manager = DataManger(data_path=DATA_PATH, user_embedding_path=USER_EMBEDDING_PATH, item_embeddings_path=ITEM_EMBEDDING_PATH)
+    data_manager = DataManger(data_path=DATA_PATH, user_embedding_path=USER_EMBEDDING_PATH, item_embeddings_path=ITEM_EMBEDDING_PATH, user_key='user_id', item_key='item_id')
     URM_train = data_manager.get_URM_train()
     URM_test = data_manager.get_URM_test()
     item_embeddings = data_manager.get_item_embeddings()
@@ -67,7 +67,7 @@ def main():
     
     objective_function_with_data = partial(
         objective_function,
-        user_embeddings=data_manager,
+        user_embeddings=user_embeddings,  # <-- This should be user_embeddings, not data_manager
         item_embeddings=item_embeddings,
         URM_train=URM_train,
         URM_test=URM_test,   
@@ -79,7 +79,7 @@ def main():
 
     optuna_study.optimize(objective_function_with_data,
                         callbacks=[save_results],
-                        n_trials = 100)
+                        n_trials = N_TRIALS)
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Run Optuna study for ImplicitUserFactorLearner")
@@ -90,6 +90,7 @@ if __name__ == "__main__":
     parser.add_argument("--db_path", type=str, help="Path to the database file", default="Prototype/optuna/optuna_study.db")
     parser.add_argument("--metric", type=str, help="Metric to optimize", default='MAP_MIN_DEN')
     parser.add_argument("--metric_k", type=int, help="K value for the metric", default=10)
+    parser.add_argument("--n_trials", type=int, help="Number of optuna trials", default=100)
     args = parser.parse_args()
     
     
@@ -101,6 +102,7 @@ if __name__ == "__main__":
     
     METRIC = args.metric
     METRIC_K = args.metric_k
+    N_TRIALS = args.n_trials
     
     print(f"Running study: {STUDY_NAME} with data path: {DATA_PATH} and user embedding path: {USER_EMBEDDING_PATH}")
     print(f"Item embedding path: {ITEM_EMBEDDING_PATH} and database path: {DB_PATH}")
