@@ -1,5 +1,5 @@
 from pathlib import Path
-import json
+from argparse import ArgumentParser
 import pandas as pd # Added for CSV handling
 
 import numpy as np
@@ -107,6 +107,7 @@ def get_IALS_results(best_params, data_manager: DataManger, URM_train: csr_matri
     Trains and returns an ImplicitALSRecommender model with the given parameters.
     """
     best_params['factors'] = best_params.pop('num_factors')  # Ensure 'factors' is used correctly
+    best_params['use_gpu'] = True  # Ensure GPU usage is enabled if available
     recommender = ImplicitALSRecommender(URM_train)
     recommender.fit(
         **best_params,
@@ -123,6 +124,7 @@ def get_IALS_results_with_embeddings(best_params, data_manager: DataManger, URM_
     
     best_params['user_factors'] = user_embeddings
     best_params['item_factors'] = item_embeddings
+    best_params['use_gpu'] = True
     
     recommender = ImplicitALSRecommender(URM_train)
     recommender.fit(
@@ -221,12 +223,20 @@ def main():
     best_params = optuna_study.best_params
     print(f"Best parameters for {STUDY_NAME}: {best_params}")
 
-    # Select and train the recommender
-    recommender = get_two_towers_results(best_params, data_manager, URM_train)
-    #recommender = get_IALS_results_with_embeddings(best_params, data_manager, URM_train)
-    #recommender = get_ItemFactorLearner_results(best_params, data_manager, URM_train)
-    #recommender = get_IALS_results_with_embeddings(best_params, data_manager, URM_train)
-    #recommender = get_2T_mixed_strategy_results(best_params, data_manager, URM_train, strategy='concatenate')
+    if MODEL_TYPE == 'TwoTower':
+        recommender = get_two_towers_results(best_params, data_manager, URM_train)
+    elif MODEL_TYPE == 'IALS':
+        recommender = get_IALS_results(best_params, data_manager, URM_train)
+    elif MODEL_TYPE == 'IALS_with_embeddings':
+        recommender = get_IALS_results_with_embeddings(best_params, data_manager, URM_train)
+    elif MODEL_TYPE == 'ItemFactorLearner':
+        recommender = get_ItemFactorLearner_results(best_params, data_manager, URM_train)
+    elif MODEL_TYPE == 'UserFactorLearner':
+        recommender = get_UserFactorLearner_results(best_params, data_manager, URM_train)
+    elif MODEL_TYPE == '2T_mixed_strategy':
+        recommender = get_2T_mixed_strategy_results(best_params, data_manager, URM_train, strategy='concatenate')
+    else:
+        raise ValueError(f"Unknown model type: {MODEL_TYPE}")
 
     model_results = {}
 
@@ -288,19 +298,37 @@ def main():
 
 
 if __name__ == "__main__":
+    
+    parser = ArgumentParser(description="Run recommender system experiment with popularity bias reduction and metrics evaluation.")
+    parser.add_argument('--use_user_embedding', action='store_true', help="Use user embeddings")
+    parser.add_argument('--use_item_embedding', action='store_true', help="Use item embeddings")
+    parser.add_argument('--objective_metric', type=str, default='MAP_MIN_DEN', help="Objective metric for evaluation (MAP_MIN_DEN, NDGC)")
+    parser.add_argument('--data_path', type=str, help="Path to the dataset")
+    parser.add_argument('--user_embedding_path', type=str, help="Path to user embeddings")
+    parser.add_argument('--item_embedding_path', type=str, help="Path to item embeddings")
+    parser.add_argument('--study_name', type=str, help="Optuna study name")
+    parser.add_argument('--optuna_path', type=str, help="Path to the Optuna database")
+    parser.add_argument('--saving_path', type=str, help="Path to save results")
+    
+    parser.add_argument('--model_type', type=str, choices=['TwoTower', 'IALS', 'IALS_with_embeddings', 'ItemFactorLearner', 'UserFactorLearner', '2T_mixed_strategy'], help="Type of model to train")
 
-    OBJECTIVE_METRIC = 'NDCG'
+    args = parser.parse_args()
+
+    USE_USER_EMBEDDING = args.use_user_embedding
+    USE_ITEM_EMBEDDING = args.use_item_embedding
+
+    OBJECTIVE_METRIC = args.objective_metric
     METRICS = [OBJECTIVE_METRIC,'DIVERSITY_MEAN_INTER_LIST', "COVERAGE_ITEM", 'NOVELTY']
-    OPTUNA_PATH = "Prototype/optuna/optuna_study_ML_small_TUNING.db"
-    STUDY_NAME = "New2TP_ITEMUSERMean_ndcg"
-    SAVING_PATH = Path(f"Prototype/optuna/popularity_filter_and_metrics/{OBJECTIVE_METRIC}")
-    DATA_PATH = Path("/leonardo_work/IscrC_DMG4RS/embednbreakfast/Prototype/Dataset/ml-latest-small/final")
+    OPTUNA_PATH = args.optuna_path
+    STUDY_NAME = args.study_name
+    SAVING_PATH = Path(args.saving_path)
+    DATA_PATH = Path(args.data_path)
     METRIC_K = 10
     
-    # Define paths for embeddings. Set to None if not used.
-    USER_EMBEDDING_PATH = Path('/leonardo_work/IscrC_DMG4RS/embednbreakfast/Prototype/Dataset/ml-latest-small/final/mean_user_embeddings_mxbai.npz')
-    ITEM_EMBEDDING_PATH = Path('/leonardo_work/IscrC_DMG4RS/embednbreakfast/Prototype/Dataset/ml-latest-small/final/item_embeddings_mxbai.npz')
-    #USER_EMBEDDING_PATH = None
-    #ITEM_EMBEDDING_PATH = None
+
+    USER_EMBEDDING_PATH = Path(args.user_embedding_path) if args.user_embedding_path is not None else None
+    ITEM_EMBEDDING_PATH = Path(args.item_embedding_path) if args.item_embedding_path is not None else None
+    
+    MODEL_TYPE = args.model_type
 
     main()

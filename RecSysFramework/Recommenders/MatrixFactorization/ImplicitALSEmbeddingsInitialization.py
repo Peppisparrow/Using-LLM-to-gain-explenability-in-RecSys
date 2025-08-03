@@ -90,10 +90,18 @@ class ImplicitALSRecommender(BaseMatrixFactorizationRecommender):
         
         self.model = self.model.to_cpu() if use_gpu else self.model
         
-        self.model.item_factors = item_factors if item_factors is not None else self.model.item_factors
-        self.model.user_factors = user_factors if user_factors is not None else self.model.user_factors
+        if item_factors is not None:
+            item_factors = np.ascontiguousarray(item_factors, dtype=np.float32)
+            self.model.item_factors = item_factors
+        if user_factors is not None:
+            user_factors = np.ascontiguousarray(user_factors, dtype=np.float32)
+            self.model.user_factors = user_factors
         
         self.model = self.model.to_gpu() if use_gpu else self.model
+        # Check if it is on gpu
+        if use_gpu and not isinstance(self.model, implicit.gpu.als.AlternatingLeastSquares):
+            raise ValueError("ImplicitALSRecommender: The model is not on GPU even though use_gpu is set to True. "
+                             "Please check your implicit library installation.")
 
         C = self._confidence_scaling(**confidence_args)
         
