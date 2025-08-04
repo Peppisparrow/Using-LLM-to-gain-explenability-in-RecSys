@@ -212,6 +212,7 @@ cython_debug/
 *.err
 *.csv
 *.sh
+*.dat
 Prototype/optuna/log_sbatch/big_steam_dataset/cineca_key_giuseppe.pub
 .gitignore
 Prototype/optuna/log_sbatch/big_steam_dataset/cineca_key_giuseppe
