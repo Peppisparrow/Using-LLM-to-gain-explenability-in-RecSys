@@ -28,7 +28,7 @@ def objective_function(trial, URM_train, URM_test, item_embeddings=None, user_em
     
     params = {
         "iterations": trial.suggest_int("iterations", 1, 500),
-        "factors": 1024,
+        "factors": user_embeddings.shape[1] if user_embeddings is not None else (item_embeddings.shape[1] if item_embeddings is not None else trial.suggest_int("factors", 10, 3000)),
         "regularization": trial.suggest_float("regularization", 1e-5, 1e-1, log=True),
         "alpha": trial.suggest_float("alpha", 0.0, 50.0),
         "confidence_scaling": trial.suggest_categorical("confidence_scaling", ['linear', 'log']),

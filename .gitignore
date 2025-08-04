@@ -28,7 +28,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
-Prototype/optuna/
+#Prototype/optuna/
 *.tsv
 *.txt
 *.mmap
