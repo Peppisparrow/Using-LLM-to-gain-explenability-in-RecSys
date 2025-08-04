@@ -300,8 +300,9 @@ def main():
 if __name__ == "__main__":
     
     parser = ArgumentParser(description="Run recommender system experiment with popularity bias reduction and metrics evaluation.")
-    parser.add_argument('--use_user_embedding', type=bool, default=False, help="Use user embeddings")
-    parser.add_argument('--use_item_embedding', type=bool, default=False, help="Use item embeddings")
+    parser.add_argument('--use_user_embedding', action='store_true', help="Use user embeddings")
+    parser.add_argument('--use_item_embedding', action='store_true', help="Use item embeddings")
+
     parser.add_argument('--objective_metric', type=str, default='MAP_MIN_DEN', help="Objective metric for evaluation (MAP_MIN_DEN, NDGC)")
     parser.add_argument('--data_path', type=str, help="Path to the dataset")
     parser.add_argument('--user_embedding_path', type=str, help="Path to user embeddings")
@@ -309,9 +310,11 @@ if __name__ == "__main__":
     parser.add_argument('--study_name', type=str, help="Optuna study name")
     parser.add_argument('--optuna_path', type=str, help="Path to the Optuna database")
     parser.add_argument('--saving_path', type=str, help="Path to save results")
-    
     parser.add_argument('--new_study_name', type=str, help="Name to save in the excel")
     parser.add_argument('--model_type', type=str, choices=['TwoTower', 'IALS', 'IALS_with_embeddings', 'ItemFactorLearner', 'UserFactorLearner', '2T_mixed_strategy'], help="Type of model to train")
+
+    # Default values
+    parser.set_defaults(use_user_embedding=False, use_item_embedding=False)
 
     args = parser.parse_args()
 
@@ -319,28 +322,31 @@ if __name__ == "__main__":
     USE_ITEM_EMBEDDING = args.use_item_embedding
 
     OBJECTIVE_METRIC = args.objective_metric
-    METRICS = [OBJECTIVE_METRIC,'DIVERSITY_MEAN_INTER_LIST', "COVERAGE_ITEM", 'NOVELTY']
+    METRICS = [OBJECTIVE_METRIC, 'DIVERSITY_MEAN_INTER_LIST', "COVERAGE_ITEM", 'NOVELTY']
     OPTUNA_PATH = args.optuna_path
     STUDY_NAME = args.study_name
     SAVING_PATH = Path(args.saving_path)
     DATA_PATH = Path(args.data_path)
     METRIC_K = 10
     
-
-    USER_EMBEDDING_PATH = Path(args.user_embedding_path) if args.user_embedding_path is not None else None
-    ITEM_EMBEDDING_PATH = Path(args.item_embedding_path) if args.item_embedding_path is not None else None
+    USER_EMBEDDING_PATH = args.user_embedding_path if USE_USER_EMBEDDING else None
+    ITEM_EMBEDDING_PATH = args.item_embedding_path if USE_ITEM_EMBEDDING else None
     
     NEW_STUDY_NAME = args.new_study_name if args.new_study_name else STUDY_NAME
     
+    MODEL_TYPE = args.model_type
+
     print(f"Using user embeddings: {USE_USER_EMBEDDING}")
     print(f"Using item embeddings: {USE_ITEM_EMBEDDING}")
+    print("-" * 50)
+    print(f"is User embedding path provided: {USER_EMBEDDING_PATH is not None}")
+    print(f"is Item embedding path provided: {ITEM_EMBEDDING_PATH is not None}")
+    print("-" * 50)
     print(f"Objective metric: {OBJECTIVE_METRIC}")
     print(f"Optuna study name: {STUDY_NAME}")
     print(f"Optuna database path: {OPTUNA_PATH}")
     print(f"Results saving path: {SAVING_PATH}")
-
-    print(f"Model type: {args.model_type}")
-    
-    MODEL_TYPE = args.model_type
+    print("-" * 50)
+    print(f"Model type: {MODEL_TYPE}")
 
     main()
