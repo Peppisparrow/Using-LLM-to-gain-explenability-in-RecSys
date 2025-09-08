@@ -17,7 +17,7 @@ model_id = "google/gemma-3-4b-it"
 prompt_path = "Dataset/ml/ml-latest-small/tuning/histories_gemma_recommender_train.json"
 candidate_items_path = "Dataset/ml/ml-latest-small/tuning/candidate_items_50_train.csv"
 target_movies_path = "Dataset/ml/ml-latest-small/tuning/histories_gemma_recommender_target.json"
-output_dir = "Dataset/ml/ml-latest-small/tuning/gemma/gemma_reranker_300_moretuned"
+output_dir = "Dataset/ml/ml-latest-small/tuning/gemma/gemma_reranker_300_5e-4_morege_20_epochs"
 output_model_path = f"{output_dir}/final_model"
 
 import re
@@ -197,6 +197,7 @@ for i, history in tqdm(enumerate(histories), desc="Preparing Data"):
     reference_completion = random.choice(target_titles)
 
     training_data.append({
+        "user_id": history['user_id'],
         "prompt": messages,
         "reference_completion": f"Based on your watch history, a great recommendation would be **{reference_completion}**.",
         "target_movies": target_titles # Lista di film target per la ricompensa
@@ -216,7 +217,7 @@ model, tokenizer = FastLanguageModel.from_pretrained(
 # Aggiungi LoRA al modello per un training efficiente (PEFT)
 model = FastLanguageModel.get_peft_model(
     model,
-    r=32, # Rank LoRA, valori comuni sono 8, 16, 32, 64
+    r=64, # Rank LoRA, valori comuni sono 8, 16, 32, 64
     target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
     lora_alpha=16,
     lora_dropout=0,
@@ -431,7 +432,7 @@ def reward_function(prompts, completions, **kwargs):
 # )
 grpo_args = GRPOConfig(
     temperature = 1.0,
-    learning_rate = 5e-5,
+    learning_rate = 5e-4,
     weight_decay = 0.01,
     warmup_ratio = 0.1,
     lr_scheduler_type = "linear",
@@ -439,9 +440,9 @@ grpo_args = GRPOConfig(
     logging_steps = 1,
     per_device_train_batch_size = 1,
     gradient_accumulation_steps = 4, # Increase to 4 for smoother training
-    num_generations = 8, # Decrease if out of memory
+    num_generations = 12, # Decrease if out of memory
     max_completion_length = 300,
-    num_train_epochs=10,          # MODIFICATO
+    num_train_epochs=20,          # MODIFICATO
     save_strategy="epoch",       # AGGIUNTO
     report_to = "none", # Can use Weights & Biases
     output_dir = output_dir,

@@ -9,7 +9,7 @@ import random
 import pandas as pd
 # --- 1. CONFIGURAZIONE ---
 # Percorso al tuo modello fine-tuned e salvato
-FINETUNED_MODEL_PATH = "Dataset/ml/ml-latest-small/tuning/gemma/gemma_reranker_300_moretuned/final_model"
+FINETUNED_MODEL_PATH = "Dataset/ml/ml-latest-small/tuning/gemma/gemma_reranker_300_5e-4_morege_20_epochs/final_model"
 TEST_SET_PATH = "Dataset/ml/ml-latest-small/tuning/histories_gemma_recommender_train+target.json"
 TARGET_MOVIES_PATH = "Dataset/ml/ml-latest-small/tuning/histories_gemma_recommender_test.json"
 candidate_items_path = "Dataset/ml/ml-latest-small/tuning/candidate_items_50_eval.csv"
@@ -189,7 +189,7 @@ for i, history_item in enumerate(tqdm(test_histories, desc="Evaluating on Test S
             max_new_tokens=400,      # Lunghezza massima della raccomandazione
             use_cache=True,
             do_sample=True,          # NECESSARIO per usare la temperatura
-            temperature=1.0,         # Come richiesto
+            temperature=0.1,         # Come richiesto
             pad_token_id=tokenizer.pad_token_id
         )
 
