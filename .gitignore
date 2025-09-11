@@ -213,6 +213,16 @@ cython_debug/
 *.csv
 *.sh
 *.dat
+*.deb
+*.whl
+*.safetensors
+*.ckpt
+*.pth
+*.jinja
+*.pt
+*.bin
+*.model
+Prototype/unsloth_compiled_cache/
 Prototype/optuna/log_sbatch/big_steam_dataset/cineca_key_giuseppe.pub
 .gitignore
 Prototype/optuna/log_sbatch/big_steam_dataset/cineca_key_giuseppe

@@ -1,6 +1,6 @@
 import pandas as pd
 import torch
-from transformers import T5ForConditionalGeneration, T5Tokenizer
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from sklearn.model_selection import train_test_split
 from datasets import Dataset
 
@@ -15,8 +15,12 @@ def test_finetuned_model(model_path, eval_dataframe, num_examples=10):
     """
     print(f"📂 Caricamento del modello e tokenizer da '{model_path}'...")
     try:
-        tokenizer = T5Tokenizer.from_pretrained(model_path)
-        model = T5ForConditionalGeneration.from_pretrained(model_path)
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            torch_dtype=torch.bfloat16,
+            device_map="auto" # Lasciamo che accelerate gestisca il posizionamento su GPU
+        )
     except OSError:
         print(f"❌ Errore: Modello non trovato in '{model_path}'.")
         print("Assicurati che il percorso sia corretto e che il training sia stato completato.")
@@ -32,9 +36,9 @@ def test_finetuned_model(model_path, eval_dataframe, num_examples=10):
 
     # Definiamo i prefissi per identificare ogni task
     task_prefixes = {
-        "Predict Title": "You are an expert in movie recommendations. Given the following information:\nGenres:",
-        "Predict Genres": "Your task is to predict the genres of the movie.",
-        "Complete Plot": "Your task is to complete the plot."
+        "Predict Title": "Predict only the title of the film",
+        "Predict Genres": "Predict only the genres of the film",
+        "Complete Plot": "Continue the plot of the film,"
     }
 
     with torch.no_grad(): # Disabilita il calcolo dei gradienti per l'inferenza
@@ -62,13 +66,17 @@ def test_finetuned_model(model_path, eval_dataframe, num_examples=10):
                 # Genera l'output dal modello
                 outputs = model.generate(
                     inputs.input_ids,
-                    max_length=512,       # Lunghezza massima per l'output
+                    max_new_tokens=512,       # Lunghezza massima per l'output
                     num_beams=5,          # Usa beam search per risultati migliori
                     early_stopping=True
                 )
 
                 # Decodifica la predizione
-                prediction = tokenizer.decode(outputs[0], skip_special_tokens=True)
+                input_length = inputs.input_ids.shape[1] 
+                generated_tokens = outputs[0][input_length:]
+
+                # 3. Decodifica solo la nuova predizione
+                prediction = tokenizer.decode(generated_tokens, skip_special_tokens=True)
 
                 print(f"▶️  ESEMPIO #{i+1}")
                 print(f"   INPUT: \n{input_text}\n")
@@ -80,7 +88,7 @@ def test_finetuned_model(model_path, eval_dataframe, num_examples=10):
 # --- Sezione Principale ---
 if __name__ == '__main__':
     # Percorso dove hai salvato il modello finale
-    final_model_path = "Dataset/ml/ml-latest-small/tuning/gemma2b/gemma2b/first_experiments_LORA/final"
+    final_model_path = "google/gemma-3-4b-it"
 
     # Ricostruiamo l'eval_df nel caso questo script venga eseguito separatamente
     print("🔄 Ricostruzione del dataset di valutazione...")
@@ -97,18 +105,21 @@ if __name__ == '__main__':
         title = row['title']
         genres = row['genres']
         plot = row['plot']
-        sft_data.append({'input_text': f"You are an expert in movie recommendations. Given the following information:\nGenres: {genres}\nPlot: {plot}\nYour task is to predict the title of the movie.", 'target_text': title})
-        sft_data.append({'input_text': f"You are an expert in movie recommendations. Given the following information:\nTitle: {title}\nPlot: {plot}\nYour task is to predict the genres of the movie.", 'target_text': genres})
+        sft_data.append({'input_text': f"You are an expert in movie recommendations. Predict only the title of the film, given the following context. Answer only with the title.\n"
+                                        f"###Context\nGenres: {genres}\nPlot: {plot}\nWhich movie am I talking about? Provide only the title.", 'target_text': title})
+        sft_data.append({'input_text': f"You are an expert in movie recommendations. Predict only the genres of the film, given the following context. Answer only with the genres separated by | (ex. genres1|genres2|genres3).\n"
+                                        f"###Context\nTitle: {title}\nPlot: {plot}\nWhat are the genres of the film? Provide only the genres.", 'target_text': genres})
         if len(plot.split()) > 20:
             plot_words = plot.split()
             mid_point = len(plot_words) // 2
             first_half = " ".join(plot_words[:mid_point])
             second_half = " ".join(plot_words[mid_point:])
-            sft_data.append({'input_text': f"You are an expert in movie recommendations. Given the following information:\nTitle: {title}\nGenre: {genres}\nPlot: {first_half}\nYour task is to complete the plot.", 'target_text': second_half})
+            sft_data.append({'input_text': f"You are an expert in movie recommendations. Continue the plot of the film, given the following context.\n"
+                                            f"###Context\nTitle: {title}\nGenre: {genres}\nPlot: {first_half}...\n", 'target_text': second_half})
 
     df_sft = pd.DataFrame(sft_data)
     _, eval_df = train_test_split(df_sft, test_size=0.1, random_state=42)
     print("✅ Dataset di valutazione pronto.")
     
     # Esegui la funzione di test
-    test_finetuned_model(model_path=final_model_path, eval_dataframe=eval_df, num_examples=10)
+    test_finetuned_model(model_path=final_model_path, eval_dataframe=eval_df, num_examples=3)

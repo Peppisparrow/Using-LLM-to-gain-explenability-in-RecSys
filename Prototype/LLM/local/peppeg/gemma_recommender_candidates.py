@@ -12,12 +12,12 @@ import numpy as np
 import pandas as pd
 
 # --- 1. Definisci Percorsi, Costanti e Parametri di Training ---
-PRE_FLIGHT_CHECK = True  # Imposta a False per saltare il pre-flight check
-model_id = "google/gemma-3-4b-it"
+PRE_FLIGHT_CHECK = False  # Imposta a False per saltare il pre-flight check
+model_id = "unsloth/gemma-3-4b-it"
 prompt_path = "Dataset/ml/ml-latest-small/tuning/histories_gemma_recommender_train.json"
-candidate_items_path = "Dataset/ml/ml-latest-small/tuning/candidate_items_50_train.csv"
+candidate_items_path = "Dataset/ml/ml-latest-small/tuning/candidate_items_30_train.csv"
 target_movies_path = "Dataset/ml/ml-latest-small/tuning/histories_gemma_recommender_target.json"
-output_dir = "Dataset/ml/ml-latest-small/tuning/gemma/gemma_reranker_300_5e-4_morege_20_epochs"
+output_dir = "Dataset/ml/ml-latest-small/tuning/gemma/gemma_30_candidates_grpo"
 output_model_path = f"{output_dir}/final_model"
 
 import re
@@ -38,6 +38,7 @@ def normalize_text(text: str) -> str:
     """
     # 1. Minuscolo
     text = text.lower()
+    text = text.replace("’", "'")
     # 2. Rimuovi la punteggiatura
     text = text.translate(str.maketrans('', '', string.punctuation))
     # 3. Rimuovi gli articoli
@@ -79,7 +80,9 @@ def parse_complex_title(title_string: str) -> list[str]:
             cleaned_titles.add(normalize_text(title))
             
     return list(cleaned_titles)
-
+from typing import Dict, List, Any, Tuple
+import torch
+    
 # --- 2. Preparazione dei Dati (con split 90/10) ---
 print(f"🔄 Loading and preparing user movie data from '{prompt_path}'...")
 try:
@@ -114,7 +117,6 @@ target_map = {item['user_id']: item['history'] for item in target}
 
 for i, history in tqdm(enumerate(histories), desc="Preparing Data"):
     MAX_HISTORY_ITEMS=10
-    print(f"Processing user {history['user_id']}...")
     if history['user_id'] not in target_map:
         continue # Salta questo utente e passa al prossimo
     target_history = target_map[history['user_id']]
@@ -211,16 +213,17 @@ print(f"✅ Prepared dataset with {len(train_dataset)} examples.")
 print(f"🚀 Loading model '{model_id}' with Unsloth for 4-bit training...")
 model, tokenizer = FastLanguageModel.from_pretrained(
     model_name=model_id,
-    dtype=None, # Usa il default
+    dtype=torch.bfloat16,
+    load_in_4bit = False,
 )
 
 # Aggiungi LoRA al modello per un training efficiente (PEFT)
 model = FastLanguageModel.get_peft_model(
     model,
-    r=64, # Rank LoRA, valori comuni sono 8, 16, 32, 64
+    r=32, # Rank LoRA, valori comuni sono 8, 16, 32, 64
     target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
-    lora_alpha=16,
-    lora_dropout=0,
+    lora_alpha=64,
+    lora_dropout=0.1,
     bias="none",
     use_gradient_checkpointing="unsloth",
     random_state=42,
@@ -240,7 +243,7 @@ if PRE_FLIGHT_CHECK:
     print("Valutiamo la capacità del modello base di seguire le istruzioni prima del fine-tuning.")
 
     # Numero di esempi da testare
-    NUM_TEST_SAMPLES = 5
+    NUM_TEST_SAMPLES = 1
     total_generated_recs = 0
     total_valid_recs = 0
 
@@ -324,6 +327,32 @@ if PRE_FLIGHT_CHECK:
         print(f"  - Percentuale di validità: {validity_percentage:.2f}%")
     else:
         print("\nNessuna raccomandazione è stata generata nel formato corretto per la valutazione.")
+    # --- TEST DI DIVERSITÀ DELLE RISPOSTE ---
+    print("\n🔁 Test di generazione multipla per valutare la varietà delle risposte...")
+
+    num_samples = 12  # Numero di volte che vuoi generare
+    generated_responses = []
+
+    model.eval()  # Modalità valutazione
+    prompt = tokenizer.apply_chat_template(test_case["prompt"], tokenize=False, add_generation_prompt=True)
+    inputs = tokenizer([prompt], return_tensors="pt", padding=True).to(model.device)
+    inputs_length = inputs.input_ids.shape[1]
+    with torch.no_grad():
+        for i in range(num_samples):
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=500,
+                do_sample=True,           # ⚠️ Abilita campionamento per output variabili
+                temperature=2.0,          # Maggiore temperatura = più diversità
+                top_p=0.95,               # Top-p sampling
+                pad_token_id=tokenizer.pad_token_id
+            )
+            response = tokenizer.decode(outputs[0][input_length:], skip_special_tokens=True)
+            generated_responses.append(response.strip())
+
+    # --- MOSTRA I RISULTATI ---
+    for idx, resp in enumerate(generated_responses, 1):
+        print(f"\n📥 Risposta #{idx}:\n{resp}")
 
     print("#"*60)
 # --- 4. Definisci la Funzione di Ricompensa e il Trainer GRPO ---
@@ -389,10 +418,7 @@ def reward_function(prompts, completions, **kwargs):
         relevance_scores = []
         for rec_line in ranked_list_raw:
             # 1. Isola la parte di testo che contiene il titolo (prima di ':' o '-')
-            title_part = rec_line.split(':')[0].split('–')[0]
-            # 2. Pulisci da caratteri di formattazione come '**'
-            clean_title = title_part.replace('**', '').strip()
-            # 3. USA LA STESSA FUNZIONE DEI TARGET per gestire anno, titoli alternativi, etc.
+            clean_title = rec_line.replace('**', '').strip()
             possible_variants = parse_complex_title(clean_title)
             # 4. Controlla se una QUALSIASI delle varianti generate matcha con il set dei target
             is_match = any(variant in normalized_target_set for variant in possible_variants)
@@ -431,21 +457,21 @@ def reward_function(prompts, completions, **kwargs):
 #     max_prompt_length=200, # Lunghezza massima del prompt
 # )
 grpo_args = GRPOConfig(
-    temperature = 1.0,
-    learning_rate = 5e-4,
+    temperature = 2.0,
+    learning_rate = 5e-5,
     weight_decay = 0.01,
     warmup_ratio = 0.1,
     lr_scheduler_type = "linear",
-    optim = "adamw_8bit",
     logging_steps = 1,
     per_device_train_batch_size = 1,
-    gradient_accumulation_steps = 4, # Increase to 4 for smoother training
-    num_generations = 12, # Decrease if out of memory
-    max_completion_length = 300,
-    num_train_epochs=20,          # MODIFICATO
+    gradient_accumulation_steps = 2, # Increase to 4 for smoother training
+    num_generations = 8, # Decrease if out of memory
+    max_completion_length = 500,
+    num_train_epochs=3,          # MODIFICATO
     save_strategy="epoch",       # AGGIUNTO
     report_to = "none", # Can use Weights & Biases
     output_dir = output_dir,
+    top_p = 0.95,
 
     # For optional training + evaluation
     # fp16_full_eval = True,

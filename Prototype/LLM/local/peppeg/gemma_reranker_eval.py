@@ -4,15 +4,17 @@ import os
 import re
 import numpy as np
 from unsloth import FastLanguageModel
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
 import random
 import pandas as pd
 # --- 1. CONFIGURAZIONE ---
 # Percorso al tuo modello fine-tuned e salvato
-FINETUNED_MODEL_PATH = "Dataset/ml/ml-latest-small/tuning/gemma/gemma_reranker_300_5e-4_morege_20_epochs/final_model"
+FINETUNED_MODEL_PATH = "Dataset/ml/ml-latest-small/tuning/gemma/gemma_30_candidates_grpo/checkpoint-151"
 TEST_SET_PATH = "Dataset/ml/ml-latest-small/tuning/histories_gemma_recommender_train+target.json"
 TARGET_MOVIES_PATH = "Dataset/ml/ml-latest-small/tuning/histories_gemma_recommender_test.json"
-candidate_items_path = "Dataset/ml/ml-latest-small/tuning/candidate_items_50_eval.csv"
+candidate_items_path = "Dataset/ml/ml-latest-small/final/candidate_items_30_eval_with_titles.csv"
+output_report_path = "Dataset/ml/ml-latest-small/final/gemma_tuned_evaluation_results_30_candidates.json"
 
 # --- 2. FUNZIONI HELPER (copiale dal tuo script di training) ---
 import re
@@ -33,6 +35,7 @@ def normalize_text(text: str) -> str:
     """
     # 1. Minuscolo
     text = text.lower()
+    text = text.replace("’", "'")
     # 2. Rimuovi la punteggiatura
     text = text.translate(str.maketrans('', '', string.punctuation))
     # 3. Rimuovi gli articoli
@@ -88,9 +91,16 @@ def ndcg_at_10(ranked_relevance_scores, num_relevant_items):
 
 # --- 3. CARICAMENTO MODELLO E DATI ---
 print("🚀 Caricamento modello fine-tuned...")
-model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name=FINETUNED_MODEL_PATH,
-    dtype=None,
+print("Tentativo di caricamento con transformers standard...")
+model = AutoModelForCausalLM.from_pretrained(
+    FINETUNED_MODEL_PATH,
+    torch_dtype=torch.bfloat16,
+    device_map="auto",
+    trust_remote_code=True
+)
+tokenizer = AutoTokenizer.from_pretrained(
+    FINETUNED_MODEL_PATH,
+    trust_remote_code=True
 )
 
 print("🔄 Caricamento dati di test e target...")
@@ -110,7 +120,9 @@ for user_id, group in tqdm(candidate_items.groupby('user_id'), desc="Processing 
 
 # --- 4. FASE DI INFERENZA E VALUTAZIONE ---
 all_ndcg_scores = []
+all_hits = []
 results = []
+
 
 for i, history_item in enumerate(tqdm(test_histories, desc="Evaluating on Test Set")):
     MAX_HISTORY_ITEMS=10
@@ -217,22 +229,29 @@ for i, history_item in enumerate(tqdm(test_histories, desc="Evaluating on Test S
 
     relevance_scores = []
     for rec_line in ranked_list_raw:
-        title_part = rec_line.split(':')[0].split('–')[0]
-        clean_title = title_part.replace('**', '').strip()
+        clean_title = rec_line.replace('**', '').strip()
         possible_variants = parse_complex_title(clean_title)
         is_match = any(variant in normalized_target_set for variant in possible_variants)
         relevance_scores.append(1.0 if is_match else 0.0)
-    
+    # print what are the titles that matched
+    # for idx, score in enumerate(relevance_scores):
+    #     if score == 1.0:
+    #         print(f"Matched title: {ranked_list_raw[idx]}")
+    # print(f"Candidate titles: {[item['title'] for item in user_candidates]}")
+    # print(f"Recomendation titles: {ranked_list_raw}")
+    # print(f"Target titles: {target_titles}")
     score = ndcg_at_10(relevance_scores, len(normalized_target_set))
+    hit = sum(relevance_scores)
     all_ndcg_scores.append(score)
-    results.append({"user_id": user_id, "recommendations": ranked_list_raw, "ground_truth": target_titles, "ndcg_score": score})
+    all_hits.append(hit)
 
     # Salva i risultati per un'analisi qualitativa
     results.append({
         "user_id": user_id,
         "recommendations": ranked_list_raw,
         "ground_truth": target_titles,
-        "ndcg_score": score
+        "ndcg_score": score,
+        "hits": hit
     })
     # <-- NUOVO BLOCCO DEBUG: si attiva solo se DEBUG_MODE è True
     if (i+1) % 10 == 0:
@@ -248,8 +267,11 @@ print("----------------------------------------")
 
 # Stampa qualche esempio per un'analisi qualitativa
 print("\n--- 🔍 Esempi di Raccomandazioni ---")
-for res in results[:5]:
+for res in results:
     print(f"User ID: {res['user_id']}")
-    print(f"  Raccomandazioni Generate: {res['recommendations']}")
-    print(f"  Verità (Ground Truth): {res['ground_truth']}")
-    print(f"  Punteggio NDCG: {res['ndcg_score']:.4f}\n")
+    print(f"  Punteggio NDCG: {res['ndcg_score']:.4f}, Hits: {res['hits']}")
+
+# Salva i risultati completi in un file JSON per ulteriori analisi
+
+with open(output_report_path, "w", encoding="utf-8") as f:
+    json.dump(results, f, indent=4, ensure_ascii=False)

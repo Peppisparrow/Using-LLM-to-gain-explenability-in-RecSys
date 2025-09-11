@@ -3,7 +3,7 @@ from sklearn.model_selection import train_test_split
 from datasets import Dataset
 import torch
 # <-- MODIFICA: Importazioni aggiornate
-from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments
+from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments, DataCollatorForLanguageModeling,DataCollatorForSeq2Seq
 from peft import LoraConfig, get_peft_model
 from trl import SFTTrainer # <-- MODIFICA: Useremo SFTTrainer per semplicità
 
@@ -84,7 +84,7 @@ print(f"✅ Creati {len(df_sft)} esempi, divisi in {len(train_dataset)} (train) 
 
 # --- 3. Setup del Modello e del Tokenizer ---
 # <-- MODIFICA: Carichiamo Gemma-2
-model_name = 'google/gemma-2-2b-it'
+model_name = 'google/gemma-3-4b-it'
 print(f"🔄 Caricamento del modello '{model_name}' e del tokenizer...")
 
 # Usiamo bfloat16 per efficienza e compatibilità con le GPU moderne
@@ -142,6 +142,7 @@ training_args = TrainingArguments(
     report_to="none", # Disabilita wandb/tensorboard se non configurati
     bf16=True # Abilita bfloat16 per il training
 )
+data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer,model=model)
 
 # <-- MODIFICA: Usiamo SFTTrainer
 trainer = SFTTrainer(
@@ -149,7 +150,9 @@ trainer = SFTTrainer(
     args=training_args,
     train_dataset=train_dataset,
     eval_dataset=eval_dataset,
-    peft_config=lora_config
+    peft_config=lora_config,
+    processing_class=tokenizer,
+    # NESSUN data_collator e NESSUN dataset_text_field necessari!
 )
 
 # --- 6. Avvio del Training ---

@@ -2,8 +2,6 @@ import os
 from functools import partial
 from pathlib import Path
 from argparse import ArgumentParser
-
-import optuna
 import pandas as pd
 from implicit.evaluation import ranking_metrics_at_k
 import sys
@@ -15,8 +13,8 @@ from Prototype.utils.optuna_utils import SaveResultsWithUserAttrs
 
 
 # ---------- CONSTANTS ----------
-NUM_CANDIDATES = 50
-output_csv_path = f'Prototype/Dataset/ml/ml-latest-small/tuning/candidate_items_{NUM_CANDIDATES}_train.csv'
+NUM_CANDIDATES = 40
+output_csv_path = f'Prototype/Dataset/ml/ml-latest-small/tuning/candidate_items_{NUM_CANDIDATES}_eval.csv'
 #STUDY_NAME = "IALS_STUDY_FIXED_ALPHA_MAP"
 DATA_PATH = Path('Prototype/Dataset/ml/ml-latest-small/tuning/')
 #USER_EMBEDDING_PATH = Path('Prototype/Dataset/steam/filtering_no_desc_giappo_corean_k10/small/user_embeddings_compressed.npz')
