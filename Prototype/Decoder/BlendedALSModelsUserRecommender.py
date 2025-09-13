@@ -8,16 +8,16 @@ from RecSysFramework.Recommenders.BaseMatrixFactorizationRecommender import Base
 from RecSysFramework.Recommenders.MatrixFactorization.ImplicitALSEmbeddingsInitialization import ImplicitALSRecommender
 from Prototype.Decoder.ItemFactorLearner_implicit import ImplicitItemFactorLearner
 
-class HybridUserFactorFactorizationRecommender(BaseMatrixFactorizationRecommender):
+class BlendedALSModelsUserRecommender(BaseMatrixFactorizationRecommender):
     """
     A hybrid recommender that combines user factors learned from two different recommenders.
     The final user factors are a weighted combination of the two sets of user factors.
     """
-    RECOMMENDER_NAME = "HybridUserFactorFactorizationRecommender"
+    RECOMMENDER_NAME = "BlendedALSModelsUserRecommender"
     
     def __init__(self, URM_train):
-        super(HybridUserFactorFactorizationRecommender, self).__init__(URM_train)
-        self._original_USER_factors = None
+        super(BlendedALSModelsUserRecommender, self).__init__(URM_train)
+        self._initial_USER_factors = None
         self._learned_USER_factors = None
         self._ITEM_factors_init = None
         self._ITEM_factors_fixed = None
@@ -54,13 +54,18 @@ class HybridUserFactorFactorizationRecommender(BaseMatrixFactorizationRecommende
         if not (0 <= blending_factor <= 1):
             raise ValueError("Blending factor must be between 0 and 1.")
         
+        learned_USER_factors = self._normalize_factor(self._learned_USER_factors)
+        original_USER_factors = self._normalize_factor(self._initial_USER_factors)
+        ITEM_factors_init = self._normalize_factor(self._ITEM_factors_init)
+        ITEM_factors_fixed = self._normalize_factor(self._ITEM_factors_fixed)
+        
         self._blending_factor = blending_factor
-        self.USER_factors = (self._blending_factor * self._learned_USER_factors +
-                             (1 - self._blending_factor) * self._original_USER_factors)
-        
-        self.ITEM_factors = (self._blending_factor * self._ITEM_factors_init +
-                             (1 - self._blending_factor) * self._ITEM_factors_fixed)
-        
+        self.USER_factors = (self._blending_factor * learned_USER_factors +
+                             (1 - self._blending_factor) * original_USER_factors)
+
+        self.ITEM_factors = (self._blending_factor * ITEM_factors_init +
+                             (1 - self._blending_factor) * ITEM_factors_fixed)
+
         if self.verbose:
             self._print(f"Blending factor set to {self._blending_factor}.")
 
@@ -98,11 +103,46 @@ class HybridUserFactorFactorizationRecommender(BaseMatrixFactorizationRecommende
         if self.verbose:
             self._print(f"Combining user factors from both models...")
         
-        self._original_USER_factors = self._normalize_factor(user_factors)
-        self._learned_USER_factors = self._normalize_factor(self._init_model.USER_factors)
-        
-        self._ITEM_factors_init = self._normalize_factor(self._init_model.ITEM_factors)
-        self._ITEM_factors_fixed = self._normalize_factor(self._fixed_model.ITEM_factors)
-        
+        self._initial_USER_factors = self._fixed_model.USER_factors
+        self._learned_USER_factors = self._init_model.USER_factors
+
+        self._ITEM_factors_init = self._init_model.ITEM_factors
+        self._ITEM_factors_fixed = self._fixed_model.ITEM_factors
+
         self._fitted_flag = True
         self.set_blending_factor(blending_factor)
+        
+    def update_user_row(self, user_id, new_user_profile):
+        """
+        Update the user factors for a specific user based on their new profile.
+
+        :param user_id: The ID of the user to update.
+        :type user_id: int
+        :param new_user_profile: The new user profile summary embeddings.
+        :type new_user_profile: np.ndarray
+        """
+        
+        if not self._fitted_flag:
+            raise ValueError("Model must be fitted before updating user factors.")
+        
+        if user_id < 0 or user_id >= self.n_users:
+            raise ValueError("Invalid user ID.")
+        
+        if new_user_profile.shape[0] != self._initial_USER_factors.shape[1]:
+            raise ValueError("New user profile must have the same number of features as the initial user factors.")
+
+        self._initial_USER_factors[user_id, :] = new_user_profile
+        
+        self.set_blending_factor(self._blending_factor)
+        
+    def reset_initial_user_factors(self, user_factors):
+        """
+        Reset the user factors to the original ones learned from the fixed model.
+        """
+        
+        if not self._fitted_flag:
+            raise ValueError("Model must be fitted before resetting user factors.")
+
+        self._initial_USER_factors = user_factors.copy()
+
+        self.set_blending_factor(self._blending_factor)
