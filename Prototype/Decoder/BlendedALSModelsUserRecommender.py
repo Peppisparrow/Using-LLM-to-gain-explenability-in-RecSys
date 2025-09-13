@@ -72,12 +72,15 @@ class BlendedALSModelsUserRecommender(BaseMatrixFactorizationRecommender):
 
     def fit(self,
             factors=100,
-            regularization=0.01,
+            regularization_init=0.01,
+            regularization_fixed=0.01,
             use_native=True, use_cg=True, use_gpu=False,
             iterations=15,
             calculate_training_loss=False, num_threads=0,
             user_factors=None,
             blending_factor=0.5,
+            alpha_fixed=40,
+            alpha_init=40,
             **confidence_args):
         """
         Fit the hybrid recommender by training both underlying models and combining their user factors.
@@ -87,17 +90,18 @@ class BlendedALSModelsUserRecommender(BaseMatrixFactorizationRecommender):
             raise ValueError("User factors must be provided for fitting the hybrid model.")
         
         self._init_model.fit(factors=factors,
-                             regularization=regularization,
+                             regularization=regularization_init,
                              use_native=use_native, use_cg=use_cg, use_gpu=use_gpu,
                              iterations=iterations,
                              calculate_training_loss=calculate_training_loss,
                              num_threads=num_threads,
                              user_factors=user_factors,
+                             alpha=alpha_init,
                              **confidence_args)
         
         self._fixed_model.fit(user_factors=user_factors,
-                              alpha=confidence_args.get('alpha', 40),
-                              reg=regularization
+                              alpha=alpha_fixed,
+                              reg=regularization_fixed,
                               )
         
         if self.verbose:
