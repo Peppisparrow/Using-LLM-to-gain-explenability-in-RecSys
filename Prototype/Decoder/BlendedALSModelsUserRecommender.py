@@ -14,139 +14,109 @@ class BlendedALSModelsUserRecommender(BaseMatrixFactorizationRecommender):
     The final user factors are a weighted combination of the two sets of user factors.
     """
     RECOMMENDER_NAME = "BlendedALSModelsUserRecommender"
-    
-    def __init__(self, URM_train):
-        super(BlendedALSModelsUserRecommender, self).__init__(URM_train)
-        self._initial_USER_factors = None
-        self._learned_USER_factors = None
-        self._ITEM_factors_init = None
-        self._ITEM_factors_fixed = None
 
+    def __init__(self, URM_train, verbose=True):
+        super(BlendedALSModelsUserRecommender, self).__init__(URM_train, verbose=verbose)
         self._fitted_flag = False
         self._blending_factor = None
+        self._initial_user_factors = None
+        self._learned_user_factors = None
+        self._model_params_cache = {}  # Cache for fixed_model parameters
+        self._model = ImplicitItemFactorLearner(self.URM_train)
 
-        self._init_model = ImplicitALSRecommender(URM_train)
-        self._fixed_model = ImplicitItemFactorLearner(URM_train)
-
-    def _normalize_factor(self, factors: np.ndarray):
+    def _normalize_factors(self, factors: np.ndarray) -> np.ndarray:
         """
-        Divide factor by its norm
-
-        @param factors: np.ndarray
-            The factors to normalize.
+        Divide factors by their L2 norm along the rows.
         """
-        return factors / np.linalg.norm(factors, axis=1, keepdims=True)
+        norms = np.linalg.norm(factors, axis=1, keepdims=True)
+        return factors / norms
 
-    def set_blending_factor(self, blending_factor):
+    def _get_blended_user_factors(self) -> np.ndarray:
         """
-        Set the blending factor for combining user factors.
+        Calculates and returns the blended user factors.
+        """
+        if not self._fitted_flag:
+            raise ValueError("Model must be fitted before blending factors.")
+        if self._blending_factor is None:
+            raise ValueError("Blending factor must be set.")
 
-        :param blending_factor: Weight for the first set of user factors. (0 <= blending_factor <= 1)
-        if blending_factor = 1, only the learnt user factors are used.
-        if blending_factor = 0, only the original user factors are used.
-        0 < blending_factor < 1, a weighted combination of both user factors is used
-        :type blending_factor: float
-        :raises ValueError: If blending_factor is not between 0 and 1.
+        initial_normalized = self._normalize_factors(self._initial_user_factors)
+        learned_normalized = self._normalize_factors(self._learned_user_factors)
+
+        return (self._blending_factor * learned_normalized +
+                (1 - self._blending_factor) * initial_normalized)
+
+    def set_blending_factor(self, blending_factor: float, **fit_params):
+        """
+        Sets the blending factor and re-fits the final model.
+        
+        If fit_params are provided, they override the cached parameters.
         """
         if not self._fitted_flag:
             raise ValueError("Model must be fitted before setting the blending factor.")
-        
-        if not (0 <= blending_factor <= 1):
-            raise ValueError("Blending factor must be between 0 and 1.")
-        
-        learned_USER_factors = self._normalize_factor(self._learned_USER_factors)
-        original_USER_factors = self._normalize_factor(self._initial_USER_factors)
-        ITEM_factors_init = self._normalize_factor(self._ITEM_factors_init)
-        ITEM_factors_fixed = self._normalize_factor(self._ITEM_factors_fixed)
+        if not (0.0 <= blending_factor <= 1.0):
+            raise ValueError("Blending factor must be between 0.0 and 1.0.")
         
         self._blending_factor = blending_factor
-        self.USER_factors = (self._blending_factor * learned_USER_factors +
-                             (1 - self._blending_factor) * original_USER_factors)
+        blended_user_factors = self._get_blended_user_factors()
+        
+        # Use provided fit_params or fall back to cached parameters
+        params_to_use = self._model_params_cache.copy()
+        params_to_use.update(fit_params)
 
-        self.ITEM_factors = (self._blending_factor * ITEM_factors_init +
-                             (1 - self._blending_factor) * ITEM_factors_fixed)
+        self._model.fit(user_factors=blended_user_factors, **params_to_use)
+
+        self.USER_factors = blended_user_factors
+        self.ITEM_factors = self._model.ITEM_factors
 
         if self.verbose:
-            self._print(f"Blending factor set to {self._blending_factor}.")
+            self._print(f"Blending factor set to {self._blending_factor}. Final model re-fitted.")
 
-
-    def fit(self,
-            factors=100,
-            regularization_init=0.01,
-            regularization_fixed=0.01,
-            use_native=True, use_cg=True, use_gpu=False,
-            iterations=15,
-            calculate_training_loss=False, num_threads=0,
-            user_factors=None,
-            blending_factor=0.5,
-            alpha_fixed=40,
-            alpha_init=40,
-            **confidence_args):
+    def fit(self, user_factors: np.ndarray,
+            blending_factor: float = 0.5,
+            init_model_params: dict = {},
+            fixed_model_params: dict = {},
+            use_gpu = True
+            ):
         """
-        Fit the hybrid recommender by training both underlying models and combining their user factors.
+        Fits the two underlying models and then blends the user factors.
         """
-        
-        if user_factors is None:
-            raise ValueError("User factors must be provided for fitting the hybrid model.")
-        
-        self._init_model.fit(factors=factors,
-                             regularization=regularization_init,
-                             use_native=use_native, use_cg=use_cg, use_gpu=use_gpu,
-                             iterations=iterations,
-                             calculate_training_loss=calculate_training_loss,
-                             num_threads=num_threads,
-                             user_factors=user_factors,
-                             alpha=alpha_init,
-                             **confidence_args)
-        
-        self._fixed_model.fit(user_factors=user_factors,
-                              alpha=alpha_fixed,
-                              reg=regularization_fixed,
-                              )
-        
-        if self.verbose:
-            self._print(f"Combining user factors from both models...")
-        
-        self._initial_USER_factors = self._fixed_model.USER_factors
-        self._learned_USER_factors = self._init_model.USER_factors
+        self._print("Starting fitting of BlendedALSModelsUserRecommender")
 
-        self._ITEM_factors_init = self._init_model.ITEM_factors
-        self._ITEM_factors_fixed = self._fixed_model.ITEM_factors
+        if user_factors is None or not isinstance(user_factors, np.ndarray):
+            raise ValueError("User factors must be a valid NumPy array.")
+        
+        ials_model = ImplicitALSRecommender(self.URM_train, verbose=self.verbose)
+
+        # Fit models
+        ials_model.fit(factors=user_factors.shape[1],
+                       user_factors=user_factors,
+                       use_gpu=use_gpu,
+                       **init_model_params)
+
+        self._initial_user_factors = user_factors 
+        self._learned_user_factors = ials_model.USER_factors
+
+        # Cache the fixed_model_params for later use
+        self._model_params_cache = fixed_model_params.copy()
 
         self._fitted_flag = True
+        
         self.set_blending_factor(blending_factor)
         
+        self._print("Fitting completed.")
+
     def update_user_row(self, user_id, new_user_profile):
         """
-        Update the user factors for a specific user based on their new profile.
-
-        :param user_id: The ID of the user to update.
-        :type user_id: int
-        :param new_user_profile: The new user profile summary embeddings.
-        :type new_user_profile: np.ndarray
+        Updates the initial user factors for a single user and re-blends.
         """
-        
         if not self._fitted_flag:
             raise ValueError("Model must be fitted before updating user factors.")
-        
-        if user_id < 0 or user_id >= self.n_users:
+        if not (0 <= user_id < self.n_users):
             raise ValueError("Invalid user ID.")
-        
-        if new_user_profile.shape[0] != self._initial_USER_factors.shape[1]:
-            raise ValueError("New user profile must have the same number of features as the initial user factors.")
+        if new_user_profile.shape[0] != self._initial_user_factors.shape[1]:
+            raise ValueError("New profile must have the same number of features as factors.")
 
-        self._initial_USER_factors[user_id, :] = new_user_profile
+        self._initial_user_factors[user_id, :] = new_user_profile
         
-        self.set_blending_factor(self._blending_factor)
-        
-    def reset_initial_user_factors(self, user_factors):
-        """
-        Reset the user factors to the original ones learned from the fixed model.
-        """
-        
-        if not self._fitted_flag:
-            raise ValueError("Model must be fitted before resetting user factors.")
-
-        self._initial_USER_factors = user_factors.copy()
-
         self.set_blending_factor(self._blending_factor)
