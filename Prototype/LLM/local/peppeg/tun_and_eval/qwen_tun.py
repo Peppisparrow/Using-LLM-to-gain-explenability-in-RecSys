@@ -13,11 +13,11 @@ import re
 import string
 
 # --- CONFIG ---
-model_id = "google/gemma-3-4b-it"
+model_id = "Qwen/Qwen3-8B"
 prompt_path = "Dataset/ml_small/tuning/histories_gemma_recommender_train.json"
 candidate_items_path = "Dataset/ml_small/tuning/candidate_items_30_train_hits.csv"
 target_movies_path = "Dataset/ml_small/tuning/histories_gemma_recommender_target.json"
-output_dir = "Dataset/ml/ml-latest-small/tuning/gemma/grpo_overfit_t1_fixed_replichiamo"
+output_dir = "Dataset/ml/ml-latest-small/tuning/qwen/qwen_30c"
 output_model_path = f"{output_dir}/final_model"
 MAX_USERS = 700  # Overfitting su un piccolo sottoinsieme
 
@@ -29,7 +29,7 @@ ARTICLES_TO_REMOVE = {
 
 def normalize_text(text: str) -> str:
     text = text.lower()
-    text = text.replace("’", "'")
+    text = text.replace("'", "'")
     text = text.translate(str.maketrans('', '', string.punctuation))
     words = text.split()
     words = [word for word in words if word not in ARTICLES_TO_REMOVE]
@@ -63,6 +63,9 @@ candidate_items = pd.read_csv(candidate_items_path)
 candidates_map = {}
 for user_id, group in tqdm(candidate_items.groupby('user_id'), desc="Processing candidates"):
     candidates_map[user_id] = group.to_dict('records')
+# fai uno shuffle dei candidati per ogni utente
+for user_id in candidates_map:
+    random.shuffle(candidates_map[user_id])
 
 training_data = []
 
@@ -139,24 +142,36 @@ train_dataset = Dataset.from_list(training_data)
 print(f"✅ Dataset creato con {len(train_dataset)} esempi.")
 
 # --- 3. CARICA MODELLO ---
+print(f"🔄 Caricamento del modello {model_id}...")
 model, tokenizer = FastModel.from_pretrained(
     model_name=model_id,
     dtype=torch.bfloat16,
     load_in_4bit=False,
 )
 
-model = FastModel.get_peft_model(model, r=8,
+model = FastModel.get_peft_model(
+    model, 
+    r=1,
     target_modules=["q_proj","k_proj","v_proj","o_proj","gate_proj","up_proj","down_proj"],
-    lora_alpha=16,
+    lora_alpha=2,
     lora_dropout=0,
 )
 
-tokenizer = get_chat_template(tokenizer, chat_template="gemma",
-    mapping={"role":"role","content":"content","user":"user","assistant":"model"})
+# ✅ CORREZIONE: Usa il chat template corretto per Qwen
+# Qwen3 usa il formato ChatML (simile a Qwen2.5)
+tokenizer = get_chat_template(
+    tokenizer, 
+    chat_template="qwen-2.5",  # Template corretto per Qwen3
+    mapping={"role": "role", "content": "content", "user": "user", "assistant": "assistant"}
+)
+
+print(f"✅ Modello {model_id} caricato con successo!")
+print(f"✅ Chat template impostato: qwen-2.5")
 
 # --- 4. FUNZIONE RICOMPENSA ---
 def dcg_score(scores):
     return np.sum(np.divide(np.power(2, scores) - 1, np.log2(np.arange(len(scores), dtype=np.float64) + 2)))
+
 def ndcg_at_10(ranked_relevance_scores, num_relevant_items):
     rank_dcg = dcg_score(ranked_relevance_scores)
     if rank_dcg == 0.0: return 0.0
@@ -179,6 +194,7 @@ def reward_function(prompts, completions, **kwargs):
             ranked_list_raw = re.findall(r"^\s*\d+\.\s*[\"\'\*\[]?\s*(.*?)\s*[\"\'\*\]]?\s*(?:\(|$)", recs_section, re.MULTILINE)
             ranked_list_raw = ranked_list_raw[:10]
         except IndexError:
+            print(f"⚠️ Nessuna raccomandazione trovata per l'utente {generated_text}.")
             ranked_list_raw = []
         if not ranked_list_raw:
             rewards.append(0.0)
@@ -190,15 +206,9 @@ def reward_function(prompts, completions, **kwargs):
             for variant in variants:
                 if variant: normalized_target_set.add(variant)
         relevance_scores = []
-        seen_recs = set()
         for rec_line in ranked_list_raw:
             clean_title = rec_line.replace('**', '').strip()
             possible_variants = parse_complex_title(clean_title)
-            norm_key = possible_variants[0] if possible_variants else clean_title.lower()
-            if norm_key in seen_recs:
-                relevance_scores.append(0.0)
-                continue
-            seen_recs.add(norm_key)
             is_match = any(variant in normalized_target_set for variant in possible_variants)
             relevance_scores.append(1.0 if is_match else 0.0)
         score = ndcg_at_10(relevance_scores, len(normalized_target_set))
@@ -206,21 +216,17 @@ def reward_function(prompts, completions, **kwargs):
         rewards.append(score)
         if score > 0:
             print(f"✅ Hit! NDCG@10: {score:.4f} - Hit count: {hits}")
-        # else:
-        #     print(f"❌ Miss! NDCG@10: {score:.4f} - Generated: {ranked_list_raw}, Target: {normalized_target_set}")
     return rewards
 
 grpo_args = GRPOConfig(
-    temperature=1,
-    top_p=0.95,
+    temperature=1.0,
     num_train_epochs=1,
     per_device_train_batch_size=1,
     gradient_accumulation_steps=1,
     learning_rate=1e-4,
     logging_steps=1,
     num_generations=5,
-    max_completion_length=300,
-    save_strategy="epoch",
+    max_completion_length=4000,
     output_dir=output_dir,
 )
 
@@ -261,22 +267,15 @@ def evaluate_model(model, tokenizer, dataset):
                 for variant in variants:
                     if variant: normalized_target_set.add(variant)
             relevance_scores = []
-            seen_recs = set()
             for rec_line in ranked_list_raw:
                 clean_title = rec_line.replace('**', '').strip()
                 possible_variants = parse_complex_title(clean_title)
-                norm_key = possible_variants[0] if possible_variants else clean_title.lower()
-                if norm_key in seen_recs: 
-                    relevance_scores.append(0.0)
-                    continue
-                seen_recs.add(norm_key)
                 is_match = any(variant in normalized_target_set for variant in possible_variants)
                 relevance_scores.append(1.0 if is_match else 0.0)
             score = ndcg_at_10(relevance_scores, len(normalized_target_set))
             hit = sum(relevance_scores)
             ndcg_scores.append(score)
             hits.append(hit)
-            # <-- NUOVO BLOCCO DEBUG: si attiva solo se DEBUG_MODE è True
             if (i + 1) % 10 == 0:
                 current_progress = len(ndcg_scores)
                 print(f"Avg NDCG after processing {current_progress} new users: {np.mean(ndcg_scores):.4f}")
@@ -286,19 +285,19 @@ def evaluate_model(model, tokenizer, dataset):
     print(f"Hit ratio: {hit_rate:.4f}")
 
 # --- 7. VALUTA PRIMA DEL TRAINING ---
-#print("\n🔍 Performance del modello BASE:")
-#evaluate_model(model, tokenizer, train_dataset)
+print("\n🔍 Performance del modello BASE:")
+# evaluate_model(model, tokenizer, train_dataset)
 
 # --- 8. TRAINING ---
 print("\n🚀 Inizio training (overfitting test)...")
 trainer.train()
 print("✨ Training terminato!")
 
-# --- 9. VALUTA DOPO IL TRAINING ---
-print("\n🔍 Performance del modello FINE-TUNED:")
-#evaluate_model(model, tokenizer, train_dataset)
-
 # --- 10. SALVA ---
 model.save_pretrained(output_model_path)
 tokenizer.save_pretrained(output_model_path)
 print(f"✅ Modello salvato in {output_model_path}")
+
+# --- 9. VALUTA DOPO IL TRAINING ---
+print("\n🔍 Performance del modello FINE-TUNED:")
+evaluate_model(model, tokenizer, train_dataset)

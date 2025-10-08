@@ -10,11 +10,19 @@ import random
 import pandas as pd
 # --- 1. CONFIGURAZIONE ---
 # Percorso al tuo modello fine-tuned e salvato
-FINETUNED_MODEL_PATH = "Dataset/ml/ml-latest-small/tuning/gemma/gemma_30_candidates_grpo/checkpoint-151"
-TEST_SET_PATH = "Dataset/ml/ml-latest-small/tuning/histories_gemma_recommender_train+target.json"
-TARGET_MOVIES_PATH = "Dataset/ml/ml-latest-small/tuning/histories_gemma_recommender_test.json"
-candidate_items_path = "Dataset/ml/ml-latest-small/final/candidate_items_30_eval_with_titles.csv"
-output_report_path = "Dataset/ml/ml-latest-small/final/gemma_tuned_evaluation_results_30_candidates.json"
+
+# FINETUNED_MODEL_PATH = "Dataset/ml/ml-latest-small/tuning/gemma/gemma_30_candidates_grpo/checkpoint-151"ù
+# FINETUNED_MODEL_PATH ="Dataset/ml/ml-latest-small/tuning/gemma4b/first_experiments_LORA/checkpoint-3223"
+# TEST_SET_PATH = "Dataset/ml_small/tuning/histories_gemma_recommender_train+target.json"
+# TARGET_MOVIES_PATH = "Dataset/ml_small/tuning/histories_gemma_recommender_test.json"
+# candidate_items_path = "Dataset/ml_small/final/candidate_items_30_eval_with_titles.csv"
+# output_report_path = "Dataset/ml_small/final/gemma_sft_results_30_candidates.json"
+
+FINETUNED_MODEL_PATH = "Dataset/ml/ml-latest-small/tuning/gemma/gemma_50_candidates_grpo_fixed/checkpoint-605"
+TEST_SET_PATH = "Dataset/ml_small/tuning/histories_gemma_recommender_train.json"
+TARGET_MOVIES_PATH = "Dataset/ml_small/tuning/histories_gemma_recommender_target.json"
+candidate_items_path = "Dataset/ml_small/tuning/candidate_items_50_train_hits.csv"
+output_report_path = "Dataset/ml_small/final/gemma_50_candidates_grpo_train_50_hcheckpoint-605.json"
 
 # --- 2. FUNZIONI HELPER (copiale dal tuo script di training) ---
 import re
@@ -201,7 +209,8 @@ for i, history_item in enumerate(tqdm(test_histories, desc="Evaluating on Test S
             max_new_tokens=400,      # Lunghezza massima della raccomandazione
             use_cache=True,
             do_sample=True,          # NECESSARIO per usare la temperatura
-            temperature=0.1,         # Come richiesto
+            temperature=2.0,         # Come richiesto
+            top_p=0.95,               # Come richiesto
             pad_token_id=tokenizer.pad_token_id
         )
 

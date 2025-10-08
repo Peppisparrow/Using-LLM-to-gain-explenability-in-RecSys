@@ -17,7 +17,7 @@ model_id = "google/gemma-3-4b-it"
 prompt_path = "Dataset/ml_small/tuning/histories_gemma_recommender_train.json"
 candidate_items_path = "Dataset/ml_small/tuning/candidate_items_30_train_hits.csv"
 target_movies_path = "Dataset/ml_small/tuning/histories_gemma_recommender_target.json"
-output_dir = "Dataset/ml/ml-latest-small/tuning/gemma/grpo_overfit_t1_fixed_replichiamo"
+output_dir = "Dataset/ml/ml-latest-small/tuning/gemma/riprodotto_rank16"
 output_model_path = f"{output_dir}/final_model"
 MAX_USERS = 700  # Overfitting su un piccolo sottoinsieme
 
@@ -145,9 +145,9 @@ model, tokenizer = FastModel.from_pretrained(
     load_in_4bit=False,
 )
 
-model = FastModel.get_peft_model(model, r=8,
+model = FastModel.get_peft_model(model, r=16,
     target_modules=["q_proj","k_proj","v_proj","o_proj","gate_proj","up_proj","down_proj"],
-    lora_alpha=16,
+    lora_alpha=32,
     lora_dropout=0,
 )
 
@@ -179,6 +179,7 @@ def reward_function(prompts, completions, **kwargs):
             ranked_list_raw = re.findall(r"^\s*\d+\.\s*[\"\'\*\[]?\s*(.*?)\s*[\"\'\*\]]?\s*(?:\(|$)", recs_section, re.MULTILINE)
             ranked_list_raw = ranked_list_raw[:10]
         except IndexError:
+            print(f"⚠️ Nessuna raccomandazione trovata per l'utente {generated_text}.")
             ranked_list_raw = []
         if not ranked_list_raw:
             rewards.append(0.0)
@@ -190,15 +191,9 @@ def reward_function(prompts, completions, **kwargs):
             for variant in variants:
                 if variant: normalized_target_set.add(variant)
         relevance_scores = []
-        seen_recs = set()
         for rec_line in ranked_list_raw:
             clean_title = rec_line.replace('**', '').strip()
             possible_variants = parse_complex_title(clean_title)
-            norm_key = possible_variants[0] if possible_variants else clean_title.lower()
-            if norm_key in seen_recs:
-                relevance_scores.append(0.0)
-                continue
-            seen_recs.add(norm_key)
             is_match = any(variant in normalized_target_set for variant in possible_variants)
             relevance_scores.append(1.0 if is_match else 0.0)
         score = ndcg_at_10(relevance_scores, len(normalized_target_set))
@@ -211,8 +206,7 @@ def reward_function(prompts, completions, **kwargs):
     return rewards
 
 grpo_args = GRPOConfig(
-    temperature=1,
-    top_p=0.95,
+    temperature=1.0,
     num_train_epochs=1,
     per_device_train_batch_size=1,
     gradient_accumulation_steps=1,
@@ -220,7 +214,6 @@ grpo_args = GRPOConfig(
     logging_steps=1,
     num_generations=5,
     max_completion_length=300,
-    save_strategy="epoch",
     output_dir=output_dir,
 )
 
@@ -261,15 +254,9 @@ def evaluate_model(model, tokenizer, dataset):
                 for variant in variants:
                     if variant: normalized_target_set.add(variant)
             relevance_scores = []
-            seen_recs = set()
             for rec_line in ranked_list_raw:
                 clean_title = rec_line.replace('**', '').strip()
                 possible_variants = parse_complex_title(clean_title)
-                norm_key = possible_variants[0] if possible_variants else clean_title.lower()
-                if norm_key in seen_recs: 
-                    relevance_scores.append(0.0)
-                    continue
-                seen_recs.add(norm_key)
                 is_match = any(variant in normalized_target_set for variant in possible_variants)
                 relevance_scores.append(1.0 if is_match else 0.0)
             score = ndcg_at_10(relevance_scores, len(normalized_target_set))
@@ -286,19 +273,20 @@ def evaluate_model(model, tokenizer, dataset):
     print(f"Hit ratio: {hit_rate:.4f}")
 
 # --- 7. VALUTA PRIMA DEL TRAINING ---
-#print("\n🔍 Performance del modello BASE:")
-#evaluate_model(model, tokenizer, train_dataset)
+print("\n🔍 Performance del modello BASE:")
+# evaluate_model(model, tokenizer, train_dataset)
 
 # --- 8. TRAINING ---
 print("\n🚀 Inizio training (overfitting test)...")
 trainer.train()
 print("✨ Training terminato!")
 
-# --- 9. VALUTA DOPO IL TRAINING ---
-print("\n🔍 Performance del modello FINE-TUNED:")
-#evaluate_model(model, tokenizer, train_dataset)
-
 # --- 10. SALVA ---
 model.save_pretrained(output_model_path)
 tokenizer.save_pretrained(output_model_path)
 print(f"✅ Modello salvato in {output_model_path}")
+
+# --- 9. VALUTA DOPO IL TRAINING ---
+print("\n🔍 Performance del modello FINE-TUNED:")
+evaluate_model(model, tokenizer, train_dataset)
+

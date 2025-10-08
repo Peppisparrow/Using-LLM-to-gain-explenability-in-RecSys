@@ -13,6 +13,7 @@ from RecSysFramework.Recommenders.Neural.TwoTowerMultipleStrategy import TwoTowe
 from RecSysFramework.Recommenders.MatrixFactorization.ImplicitALSEmbeddingsInitialization import ImplicitALSRecommender
 from Prototype.Decoder.ItemFactorLearner_implicit import ImplicitItemFactorLearner
 from Prototype.Decoder.ImplicitUserFactorLearner import ImplicitUserFactorLearner
+from Prototype.Decoder.BlendedALSModelsUserRecommender import BlendedALSModelsUserRecommender
 from Prototype.data_manager2 import DataManger
 
 import threadpoolctl
@@ -191,53 +192,53 @@ def get_2T_mixed_strategy_results(best_params, data_manager: DataManger, URM_tra
     
     return recommender
 
-def main():
+def get_blended_als_user_results(best_params, data_manager: DataManger, URM_train: csr_matrix):
+
     """
-    Main execution function to run the experiment, evaluate the model, and save results to a CSV.
+        init_model_params = {
+        "iterations": trial.suggest_int("iterations", 1, 500),
+        "regularization": trial.suggest_float("reg_init", 1e-5, 1e-1, log=True),
+        "alpha": trial.suggest_float("alpha_init", 0.0, 50.0),
+        "confidence_scaling": trial.suggest_categorical("confidence_scaling", ['linear', 'log']),
+    }
+    
+    blending_factor = trial.suggest_float("blending_factor", 0.1, 0.9)
+
+    fixed_model_params = {
+        "reg": trial.suggest_float("reg_fixed", 1e-5, 1e-1, log=True),
+        "alpha": trial.suggest_float("alpha_fixed", 0.0, 50.0),
+    }
     """
-    if USER_EMBEDDING_PATH is not None:
-        print("Using user embeddings from:", USER_EMBEDDING_PATH)
-    if ITEM_EMBEDDING_PATH is not None:
-        print("Using item embeddings from:", ITEM_EMBEDDING_PATH)
+    
+    user_embeddings = data_manager.get_user_embeddings() if USER_EMBEDDING_PATH else None
+    
+    best_params_init = {
+        "iterations": best_params['iterations'],
+        "regularization": best_params['reg_init'],
+        "alpha": best_params['alpha_init'],
+        "confidence_scaling": best_params['confidence_scaling'],
+    }
+    
+    best_params_fixed = {
+        "reg": best_params['reg_fixed'],
+        "alpha": best_params['alpha_fixed'],
+    }
+    
+    best_params = {
+        "user_factors": user_embeddings,
+        "blending_factor": best_params['blending_factor'],
+        "init_model_params": best_params_init,
+        "fixed_model_params": best_params_fixed
+    }
 
-    data_manager = DataManger(data_path=DATA_PATH, user_embedding_path=USER_EMBEDDING_PATH, item_embeddings_path=ITEM_EMBEDDING_PATH, user_key='user_id', item_key='item_id')
-    URM_train = data_manager.get_URM_train()
-    URM_test = data_manager.get_URM_test()
 
-    # Get the list of popular items to ignore
-    items_to_ignore_for_bias_reduction = remove_popularity_bias(URM_test, fraction_to_remove=1/3)
-    
-    # Initialize evaluator for original URM_test (no ignored items)
-    evaluator_test = EvaluatorHoldout(URM_test, cutoff_list=[10])
-    
-    # Initialize evaluator for "filtered" context by passing the items to ignore.
-    evaluator_test_filtered = EvaluatorHoldout(URM_test, cutoff_list=[10],
-                                               ignore_items=items_to_ignore_for_bias_reduction)
-    
-    # Load optuna study
-    optuna_study = optuna.load_study(study_name=STUDY_NAME, storage=f"sqlite:///{OPTUNA_PATH}")
-    
-    # Get best parameters
-    print(f"Original value for study {STUDY_NAME}: {optuna_study.best_value}")
-    
-    best_params = optuna_study.best_params
-    print(f"Best parameters for {STUDY_NAME}: {best_params}")
+    recommender = BlendedALSModelsUserRecommender(URM_train)
+    recommender.fit(
+        **best_params,
+    )
+    return recommender
 
-    if MODEL_TYPE == 'TwoTower':
-        recommender = get_two_towers_results(best_params, data_manager, URM_train)
-    elif MODEL_TYPE == 'IALS':
-        recommender = get_IALS_results(best_params, data_manager, URM_train)
-    elif MODEL_TYPE == 'IALS_with_embeddings':
-        recommender = get_IALS_results_with_embeddings(best_params, data_manager, URM_train)
-    elif MODEL_TYPE == 'ItemFactorLearner':
-        recommender = get_ItemFactorLearner_results(best_params, data_manager, URM_train)
-    elif MODEL_TYPE == 'UserFactorLearner':
-        recommender = get_UserFactorLearner_results(best_params, data_manager, URM_train)
-    elif MODEL_TYPE == '2T_mixed_strategy':
-        recommender = get_2T_mixed_strategy_results(best_params, data_manager, URM_train, strategy='concatenate')
-    else:
-        raise ValueError(f"Unknown model type: {MODEL_TYPE}")
-
+def compute_model_results(recommender, optuna_study, URM_train, URM_test, evaluator_test, evaluator_test_filtered, items_to_ignore_for_bias_reduction):
     model_results = {}
 
     # --- MODIFIED SAVING LOGIC ---
@@ -297,29 +298,76 @@ def main():
     print(f"\nResults appended to: {csv_file_path}")
 
 
+
+def main():
+    """
+    Main execution function to run the experiment, evaluate the model, and save results to a CSV.
+    """
+    if USER_EMBEDDING_PATH is not None:
+        print("Using user embeddings from:", USER_EMBEDDING_PATH)
+    if ITEM_EMBEDDING_PATH is not None:
+        print("Using item embeddings from:", ITEM_EMBEDDING_PATH)
+
+    data_manager = DataManger(data_path=DATA_PATH, user_embedding_path=USER_EMBEDDING_PATH, item_embeddings_path=ITEM_EMBEDDING_PATH, user_key='user_id', item_key='item_id')
+    URM_train = data_manager.get_URM_train()
+    URM_test = data_manager.get_URM_test()
+
+    # Get the list of popular items to ignore
+    items_to_ignore_for_bias_reduction = remove_popularity_bias(URM_test, fraction_to_remove=1/3)
+    
+    # Initialize evaluator for original URM_test (no ignored items)
+    evaluator_test = EvaluatorHoldout(URM_test, cutoff_list=[10])
+    
+    # Initialize evaluator for "filtered" context by passing the items to ignore.
+    evaluator_test_filtered = EvaluatorHoldout(URM_test, cutoff_list=[10],
+                                               ignore_items=items_to_ignore_for_bias_reduction)
+    
+    # Load optuna study
+    optuna_study = optuna.load_study(study_name=STUDY_NAME, storage=f"sqlite:///{OPTUNA_PATH}")
+    
+    # Get best parameters
+    print(f"Original value for study {STUDY_NAME}: {optuna_study.best_value}")
+    
+    best_params = optuna_study.best_params
+    print(f"Best parameters for {STUDY_NAME}: {best_params}")
+
+    if MODEL_TYPE == 'TwoTower':
+        recommender = get_two_towers_results(best_params, data_manager, URM_train)
+    elif MODEL_TYPE == 'IALS':
+        recommender = get_IALS_results(best_params, data_manager, URM_train)
+    elif MODEL_TYPE == 'IALS_with_embeddings':
+        recommender = get_IALS_results_with_embeddings(best_params, data_manager, URM_train)
+    elif MODEL_TYPE == 'ItemFactorLearner':
+        recommender = get_ItemFactorLearner_results(best_params, data_manager, URM_train)
+    elif MODEL_TYPE == 'UserFactorLearner':
+        recommender = get_UserFactorLearner_results(best_params, data_manager, URM_train)
+    elif MODEL_TYPE == '2T_mixed_strategy':
+        recommender = get_2T_mixed_strategy_results(best_params, data_manager, URM_train, strategy='concatenate')
+    elif MODEL_TYPE == 'BlendedALSUser':
+        recommender = get_blended_als_user_results(best_params, data_manager, URM_train)
+    else:
+        raise ValueError(f"Unknown model type: {MODEL_TYPE}")
+
+    compute_model_results(recommender, optuna_study, URM_train, URM_test, evaluator_test, evaluator_test_filtered, items_to_ignore_for_bias_reduction)
+    
 if __name__ == "__main__":
     
     parser = ArgumentParser(description="Run recommender system experiment with popularity bias reduction and metrics evaluation.")
-    parser.add_argument('--use_user_embedding', action='store_true', help="Use user embeddings")
-    parser.add_argument('--use_item_embedding', action='store_true', help="Use item embeddings")
 
-    parser.add_argument('--objective_metric', type=str, default='MAP_MIN_DEN', help="Objective metric for evaluation (MAP_MIN_DEN, NDGC)")
+    parser.add_argument('--objective_metric', type=str, default='NDCG', help="Objective metric for evaluation (MAP_MIN_DEN, NDCG)")
     parser.add_argument('--data_path', type=str, help="Path to the dataset")
-    parser.add_argument('--user_embedding_path', type=str, help="Path to user embeddings")
-    parser.add_argument('--item_embedding_path', type=str, help="Path to item embeddings")
+    parser.add_argument('--user_embedding_path', type=str, help="Path to user embeddings", default=None)
+    parser.add_argument('--item_embedding_path', type=str, help="Path to item embeddings", default=None)
     parser.add_argument('--study_name', type=str, help="Optuna study name")
     parser.add_argument('--optuna_path', type=str, help="Path to the Optuna database")
     parser.add_argument('--saving_path', type=str, help="Path to save results")
     parser.add_argument('--new_study_name', type=str, help="Name to save in the excel")
-    parser.add_argument('--model_type', type=str, choices=['TwoTower', 'IALS', 'IALS_with_embeddings', 'ItemFactorLearner', 'UserFactorLearner', '2T_mixed_strategy'], help="Type of model to train")
+    parser.add_argument('--model_type', type=str, choices=['TwoTower', 'IALS', 'IALS_with_embeddings', 'ItemFactorLearner', 'UserFactorLearner', '2T_mixed_strategy', 'BlendedALSUser'], help="Type of model to train")
 
     # Default values
     parser.set_defaults(use_user_embedding=False, use_item_embedding=False)
 
     args = parser.parse_args()
-
-    USE_USER_EMBEDDING = args.use_user_embedding
-    USE_ITEM_EMBEDDING = args.use_item_embedding
 
     OBJECTIVE_METRIC = args.objective_metric
     METRICS = [OBJECTIVE_METRIC, 'DIVERSITY_MEAN_INTER_LIST', "COVERAGE_ITEM", 'NOVELTY']
@@ -329,8 +377,11 @@ if __name__ == "__main__":
     DATA_PATH = Path(args.data_path)
     METRIC_K = 10
     
-    USER_EMBEDDING_PATH = args.user_embedding_path if USE_USER_EMBEDDING else None
-    ITEM_EMBEDDING_PATH = args.item_embedding_path if USE_ITEM_EMBEDDING else None
+    USER_EMBEDDING_PATH = args.user_embedding_path
+    ITEM_EMBEDDING_PATH = args.item_embedding_path
+    
+    USE_USER_EMBEDDING = USER_EMBEDDING_PATH is not None
+    USE_ITEM_EMBEDDING = ITEM_EMBEDDING_PATH is not None
     
     NEW_STUDY_NAME = args.new_study_name if args.new_study_name else STUDY_NAME
     

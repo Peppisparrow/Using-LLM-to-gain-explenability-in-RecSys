@@ -8,10 +8,10 @@ from peft import LoraConfig, get_peft_model
 from trl import SFTTrainer # <-- MODIFICA: Useremo SFTTrainer per semplicità
 
 # --- 1. Caricamento e Pulizia dei Dati ---
-datapath = 'Dataset/ml/ml-latest-small/tuning'
+datapath = 'Dataset/ml_small/tuning'
 app_plots_path = f'{datapath}/app_plots.csv'
 # <-- MODIFICA: Nuovo output_dir per Gemma
-output_dir = "Dataset/ml/ml-latest-small/tuning/gemma2b/first_experiments_LORA"
+output_dir = "Dataset/ml/ml-latest-small/tuning/gemmasft/onlu_title_lora"
 print("📂 Caricamento del dataset dei film...")
 
 try:
@@ -36,7 +36,7 @@ for _, row in df_plots.iterrows():
     plot = row['plot']
 
     # Task 1: Predire il titolo
-    prompt1 = f"You are an expert in movie recommendations. Given the following information:\nGenres: {genres}\nPlot: {plot}\nYour task is to predict the title of the movie."
+    prompt1 = f"You are an expert in movie recommendations.\nYour task is to predict the title of the movie.\n Given the following information:\nGenres: {genres}\nPlot: {plot}\nPlease provide the title..."
     sft_data.append({
         "messages": [
             {"role": "user", "content": prompt1},
@@ -45,27 +45,27 @@ for _, row in df_plots.iterrows():
     })
 
     # Task 2: Predire il genere
-    prompt2 = f"You are an expert in movie recommendations. Given the following information:\nTitle: {title}\nPlot: {plot}\nYour task is to predict the genres of the movie."
-    sft_data.append({
-        "messages": [
-            {"role": "user", "content": prompt2},
-            {"role": "assistant", "content": genres}
-        ]
-    })
+    # prompt2 = f"You are an expert in movie GENRES. Given the following information:\nTitle: {title}\nPlot: {plot}\nYour task is to predict the genres of the movie."
+    # sft_data.append({
+    #     "messages": [
+    #         {"role": "user", "content": prompt2},
+    #         {"role": "assistant", "content": genres}
+    #     ]
+    # })
 
     # Task 3: Completare la trama
-    if len(plot.split()) > 20:
-        plot_words = plot.split()
-        mid_point = len(plot_words) // 2
-        first_half = " ".join(plot_words[:mid_point])
-        second_half = " ".join(plot_words[mid_point:])
-        prompt3 = f"You are an expert in movie recommendations. Given the following information:\nTitle: {title}\nGenre: {genres}\nPlot: {first_half}\nYour task is to complete the plot."
-        sft_data.append({
-            "messages": [
-                {"role": "user", "content": prompt3},
-                {"role": "assistant", "content": second_half}
-            ]
-        })
+    # if len(plot.split()) > 20:
+    #     plot_words = plot.split()
+    #     mid_point = len(plot_words) // 2
+    #     first_half = " ".join(plot_words[:mid_point])
+    #     second_half = " ".join(plot_words[mid_point:])
+    #     prompt3 = f"You are an expert in movie recommendations. Given the following information:\nTitle: {title}\nGenre: {genres}\nPlot: {first_half}\nYour task is to complete the plot."
+    #     sft_data.append({
+    #         "messages": [
+    #             {"role": "user", "content": prompt3},
+    #             {"role": "assistant", "content": second_half}
+    #         ]
+    #     })
 
 # Creiamo un DataFrame e poi un Dataset di Hugging Face
 df_sft = pd.DataFrame(sft_data)
@@ -113,7 +113,7 @@ lora_config = LoraConfig(
         "up_proj",
         "down_proj",
     ],
-    lora_dropout=0.05,
+    lora_dropout=0,
     bias="none",
     # <-- MODIFICA: Task type per modelli decoder-only
     task_type="CAUSAL_LM"
@@ -127,12 +127,12 @@ model.print_trainable_parameters()
 # --- 5. Configurazione del Training con SFTTrainer ---
 training_args = TrainingArguments(
     output_dir=output_dir,
-    num_train_epochs=5,
+    num_train_epochs=1,
     per_device_train_batch_size=1,
     per_device_eval_batch_size=1,
-    gradient_accumulation_steps=1,
+    gradient_accumulation_steps=5,
     warmup_steps=500,
-    learning_rate=2e-5, # <-- MODIFICA: Un learning rate più basso è spesso migliore per SFT
+    learning_rate=5e-5, # <-- MODIFICA: Un learning rate più basso è spesso migliore per SFT
     weight_decay=0.01,
     logging_dir=f'{output_dir}/logs',
     logging_steps=100,
@@ -142,7 +142,6 @@ training_args = TrainingArguments(
     report_to="none", # Disabilita wandb/tensorboard se non configurati
     bf16=True # Abilita bfloat16 per il training
 )
-data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer,model=model)
 
 # <-- MODIFICA: Usiamo SFTTrainer
 trainer = SFTTrainer(

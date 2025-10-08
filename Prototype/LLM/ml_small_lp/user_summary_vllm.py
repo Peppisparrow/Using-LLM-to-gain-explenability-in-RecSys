@@ -4,27 +4,46 @@ import os
 import time
 from pathlib import Path
 from tqdm import tqdm
+from argparse import ArgumentParser
 
+# Set environment variables for vLLM
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['VLLM_ATTENTION_BACKEND'] = 'DUAL_CHUNK_FLASH_ATTN'
+os.environ['VLLM_USE_V1'] = '0'
 
 # --- CONFIGURATION ---
-
-# 3. Model settings
-#MODEL_NAME = "google/gemma-3-4b-it"
-#MODEL_NAME = "Qwen/Qwen2.5-7B-Instruct-1M"
-MODEL_NAME = "graelo/Qwen2.5-7B-Instruct-1M-AWQ"
-
-# 1. Define your file paths
-INPUT_PATH = Path('Prototype/Dataset/ml_small/tuning/history_desc_embedding/user_prompts_DESC.parquet')
-OUTPUT_PATH = Path('user_descriptions_from_llm_DESC_ollama_TEST_QWEN_1M.csv')
-
-# 2. Inference settings
 API_CALL_DELAY_SECONDS = 0.2  # Lower since local inference
-SAVE_INTERVAL = 1 
+SAVE_INTERVAL = 1
+
+INPUT_PATH = Path('Prototype/Dataset/ml_small/tuning/history_desc_embedding/local_summaries/user_prompts_DESC_TESTED.parquet')
+MODEL_NAME = "Qwen/Qwen3-30B-A3B-Instruct-2507"
+OUTPUT_PATH = Path('Prototype/Dataset/ml_small/tuning/history_desc_embedding/local_summaries/user_desc_from_llm_QWEN_30B_128K_VLLM.csv')
+
+# Sampling parameters
+SAMPLING_PARAMS = SamplingParams(
+    temperature=0.7,
+    top_p=0.8,
+    top_k=20,
+    min_p=0.0,
+    max_tokens=1024  # At most 1024 tokens for generation
+)
 
 # --- EXECUTION BLOCK ---
 
 if __name__ == "__main__":
+    # parser = ArgumentParser(description="Generate user descriptions using vLLM backend.")
+    # parser.add_argument('--input', type=str, default=str(INPUT_PATH), help='Path to the input parquet file with user prompts.')
+    # parser.add_argument('--output', type=str, default=str(OUTPUT_PATH), help='Path to the output CSV file for user descriptions.')
+    # parser.add_argument('--model', type=str, default=MODEL_NAME, help='Model path to use for generation.')
+    # parser.add_argument('--delay', type=float, default=API_CALL_DELAY_SECONDS, help='Delay between API calls in seconds.')
+
+    # args = parser.parse_args()
+    
+    # INPUT_PATH = Path(args.input)
+    # OUTPUT_PATH = Path(args.output)
+    # MODEL_NAME = args.model
+    # API_CALL_DELAY_SECONDS = args.delay
+
     print("--- Starting User Description Generation Process ---")
 
     # 1. Check if the input file exists
@@ -49,11 +68,24 @@ if __name__ == "__main__":
             print(f"🔴 Error reading existing output file: {e}. Starting from scratch.")
     else:
         print("📝 No existing output file found. Starting a new session.")
+        OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    # 3. Initialize the vLLM engine
+    # 3. Initialize the vLLM engine with specified options
     try:
-        llm = LLM(model=MODEL_NAME, dtype="bfloat16", max_model_len=105008)  # Uses BFP16 weights if available
+        llm = LLM(
+            model=MODEL_NAME,
+            tensor_parallel_size=4,
+            max_model_len=131072,  # Match max_num_batched_tokens for consistency
+            enable_chunked_prefill=True,
+            max_num_batched_tokens=131072,
+            enforce_eager=True,
+            max_num_seqs=1,
+            gpu_memory_utilization=0.7,
+            quantization="gptq",  # 4-bit quantization
+            dtype="half"  # Use fp16 for better compatibility
+        )
         print(f"✅ Loaded model '{MODEL_NAME}' successfully.")
+        print(f"📊 Sampling params: temp={SAMPLING_PARAMS.temperature}, top_p={SAMPLING_PARAMS.top_p}, top_k={SAMPLING_PARAMS.top_k}, max_tokens={SAMPLING_PARAMS.max_tokens}")
     except Exception as e:
         print(f"🔴 FATAL: Could not load model: {e}")
         exit()
@@ -74,16 +106,13 @@ if __name__ == "__main__":
 
         # Skip if already processed
         if user_id in processed_user_ids:
-            print(f"Skipping user id {user_id}")
             continue
 
         prompt = row['prompt']
 
         try:
-            # 5. Generate description locally
-            print(f"\n➡️ Generating description for user {user_id} with description {prompt[:30]}...")
-            
-            outputs = llm.generate([prompt])
+            # 5. Generate description locally with sampling parameters
+            outputs = llm.generate([prompt], SAMPLING_PARAMS)
             description = outputs[0].outputs[0].text.strip() if outputs and outputs[0].outputs else "No description generated"
 
             # 6. Append result

@@ -4,23 +4,61 @@ import os
 import time
 from pathlib import Path
 from tqdm import tqdm
+from argparse import ArgumentParser
 
 # --- CONFIGURATION ---
 
 # 1. Define your file paths
-INPUT_PATH = Path('Prototype/Dataset/ml_small/tuning/history_desc_embedding/qwen_summaries_json/user_prompts_DESC_JSON.parquet')
-OUTPUT_PATH = Path('user_descriptions_from_llm_DESC_ollama_TEST_QWEN_1M_OLLAMA_PROMPT_JSON.csv')
+INPUT_PATH = Path('Prototype/Dataset/ml_small/tuning/history_desc_embedding/local_summaries/user_prompts_DESC_TESTED.parquet')
 
 # 2. Inference settings
 API_CALL_DELAY_SECONDS = 0.1  # Delay between calls to the local Ollama server
 SAVE_INTERVAL = 1  # Save after every 1 user to reduce disk I/O
+CONTEXT_LENGTH = 128000  # Context length for the model   
 
-#OLLAMA_MODEL_NAME = "gemma3:4b-it-qat"
-OLLAMA_MODEL_NAME = "myaniu/qwen2.5-1m:7b-instruct-q4_K_M"
+
+#OLLAMA_MODEL_NAME = "gemma3:12b-it-qat"
+#OUTPUT_PATH = Path('Prototype/Dataset/ml_small/tuning/history_desc_embedding/qwen_summaries/user_desc_from_llm_Gemma3_12B_128K.csv')
+#OLLAMA_MODEL_NAME = "myaniu/qwen2.5-1m:7b-instruct-q4_K_M"
+#OLLAMA_MODEL_NAME = "hf.co/lmstudio-community/Qwen2.5-7B-Instruct-1M-GGUF:Q6_K"
+#OLLAMA_MODEL_NAME = "hf.co/bartowski/Qwen2.5-14B-Instruct-1M-GGUF:Q4_K_M"
+#OUTPUT_PATH = Path('Prototype/Dataset/ml_small/tuning/history_desc_embedding/qwen_summaries_tested/user_desc_from_llm_QWEN_1M_OLLAMA_PROMPT_TESTAGAIN_14B_Q4.csv')
+#OLLAMA_MODEL_NAME = "hf.co/bartowski/Qwen2.5-14B-Instruct-1M-GGUF:Q5_K_S"
+#OUTPUT_PATH = Path('Prototype/Dataset/ml_small/tuning/history_desc_embedding/qwen_summaries_tested/user_desc_from_llm_QWEN_1M_OLLAMA_PROMPT_TESTAGAIN_14B_Q5.csv')
+OLLAMA_MODEL_NAME = "hf.co/bartowski/Qwen2.5-14B-Instruct-1M-GGUF:Q6_K"
+OUTPUT_PATH = Path('Prototype/Dataset/ml_small/tuning/history_desc_embedding/local_summaries/user_desc_from_llm_QWEN_1M_14B_Q6_128K.csv')
 
 # --- EXECUTION BLOCK ---
 
 if __name__ == "__main__":
+    parser = ArgumentParser(description="Generate user descriptions using Ollama LLM backend.")
+    parser.add_argument('--input', type=str, default=str(INPUT_PATH), help='Path to the input parquet file with user prompts.')
+    parser.add_argument('--output', type=str, default=str(OUTPUT_PATH), help='Path to the output CSV file for user descriptions.')
+    parser.add_argument('--model', type=str, default=OLLAMA_MODEL_NAME, help='Ollama model name to use for generation.')
+    parser.add_argument('--delay', type=float, default=API_CALL_DELAY_SECONDS, help='Delay between API calls in seconds.')
+    parser.add_argument('--context_length', type=int, default=CONTEXT_LENGTH, help='Context length for the model.')
+
+    args = parser.parse_args()
+    
+    INPUT_PATH = Path(args.input)
+    OUTPUT_PATH = Path(args.output)
+    OLLAMA_MODEL_NAME = args.model
+    API_CALL_DELAY_SECONDS = args.delay
+    CONTEXT_LENGTH = args.context_length
+    
+            
+    OLLAMA_OPTIONS = {
+        'num_ctx': CONTEXT_LENGTH,
+    }
+    
+    print(f"--- Configuration ---")
+    print(f"Input Path: {INPUT_PATH}")
+    print(f"Output Path: {OUTPUT_PATH}")
+    print(f"Ollama Model: {OLLAMA_MODEL_NAME}")
+    print(f"API Call Delay (s): {API_CALL_DELAY_SECONDS}")
+    print(f"Context Length: {CONTEXT_LENGTH}")
+    print(f"---------------------\n")
+    
     print("--- Starting User Description Generation Process (Ollama Backend) ---")
 
     # 1. Check if the input file exists
@@ -75,7 +113,7 @@ if __name__ == "__main__":
             response = ollama.generate(
                 model=OLLAMA_MODEL_NAME,
                 prompt=prompt,
-                #options=OLLAMA_OPTIONS
+                options=OLLAMA_OPTIONS
             )
             
             description = response['response'].strip() if response and 'response' in response else "No description generated"

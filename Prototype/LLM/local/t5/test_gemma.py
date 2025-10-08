@@ -36,7 +36,7 @@ def test_finetuned_model(model_path, eval_dataframe, num_examples=10):
 
     # Definiamo i prefissi per identificare ogni task
     task_prefixes = {
-        "Predict Title": "Predict only the title of the film",
+        "Predict Title": "Your task is to predict the title of the movie",
         "Predict Genres": "Predict only the genres of the film",
         "Complete Plot": "Continue the plot of the film,"
     }
@@ -88,11 +88,11 @@ def test_finetuned_model(model_path, eval_dataframe, num_examples=10):
 # --- Sezione Principale ---
 if __name__ == '__main__':
     # Percorso dove hai salvato il modello finale
-    final_model_path = "google/gemma-3-4b-it"
+    final_model_path = "Dataset/ml/ml-latest-small/tuning/gemmasft/onlu_title_lora/final"
 
     # Ricostruiamo l'eval_df nel caso questo script venga eseguito separatamente
     print("🔄 Ricostruzione del dataset di valutazione...")
-    datapath = 'Dataset/ml/ml-latest-small/tuning'
+    datapath = 'Dataset/ml_small/tuning'
     app_plots_path = f'{datapath}/app_plots.csv'
     df_plots = pd.read_csv(app_plots_path)
     df_plots.dropna(subset=['title', 'genres', 'plot'], inplace=True)
@@ -105,17 +105,17 @@ if __name__ == '__main__':
         title = row['title']
         genres = row['genres']
         plot = row['plot']
-        sft_data.append({'input_text': f"You are an expert in movie recommendations. Predict only the title of the film, given the following context. Answer only with the title.\n"
-                                        f"###Context\nGenres: {genres}\nPlot: {plot}\nWhich movie am I talking about? Provide only the title.", 'target_text': title})
-        sft_data.append({'input_text': f"You are an expert in movie recommendations. Predict only the genres of the film, given the following context. Answer only with the genres separated by | (ex. genres1|genres2|genres3).\n"
-                                        f"###Context\nTitle: {title}\nPlot: {plot}\nWhat are the genres of the film? Provide only the genres.", 'target_text': genres})
-        if len(plot.split()) > 20:
-            plot_words = plot.split()
-            mid_point = len(plot_words) // 2
-            first_half = " ".join(plot_words[:mid_point])
-            second_half = " ".join(plot_words[mid_point:])
-            sft_data.append({'input_text': f"You are an expert in movie recommendations. Continue the plot of the film, given the following context.\n"
-                                            f"###Context\nTitle: {title}\nGenre: {genres}\nPlot: {first_half}...\n", 'target_text': second_half})
+        prompt1 = f"You are an expert in movie recommendations.\nYour task is to predict the title of the movie.\n Given the following information:\nGenres: {genres}\nPlot: {plot}\nPlease provide the title..."
+        sft_data.append({'input_text': prompt1, 'target_text': title})
+        # sft_data.append({'input_text': f"You are an expert in movie recommendations. Predict only the genres of the film, given the following context. Answer only with the genres separated by | (ex. genres1|genres2|genres3).\n"
+        #                                 f"###Context\nTitle: {title}\nPlot: {plot}\nWhat are the genres of the film? Provide only the genres.", 'target_text': genres})
+        # if len(plot.split()) > 20:
+        #     plot_words = plot.split()
+        #     mid_point = len(plot_words) // 2
+        #     first_half = " ".join(plot_words[:mid_point])
+        #     second_half = " ".join(plot_words[mid_point:])
+        #     sft_data.append({'input_text': f"You are an expert in movie recommendations. Continue the plot of the film, given the following context.\n"
+        #                                     f"###Context\nTitle: {title}\nGenre: {genres}\nPlot: {first_half}...\n", 'target_text': second_half})
 
     df_sft = pd.DataFrame(sft_data)
     _, eval_df = train_test_split(df_sft, test_size=0.1, random_state=42)

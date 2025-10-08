@@ -14,10 +14,10 @@ import pandas as pd
 # --- 1. Definisci Percorsi, Costanti e Parametri di Training ---
 PRE_FLIGHT_CHECK = False  # Imposta a False per saltare il pre-flight check
 model_id = "unsloth/gemma-3-4b-it"
-prompt_path = "Dataset/ml/ml-latest-small/tuning/histories_gemma_recommender_train.json"
-candidate_items_path = "Dataset/ml/ml-latest-small/tuning/candidate_items_30_train.csv"
-target_movies_path = "Dataset/ml/ml-latest-small/tuning/histories_gemma_recommender_target.json"
-output_dir = "Dataset/ml/ml-latest-small/tuning/gemma/gemma_30_candidates_grpo"
+prompt_path = "Dataset/ml_small/tuning/histories_gemma_recommender_train.json"
+candidate_items_path = "Dataset/ml_small/tuning/candidate_items_50_train_hits.csv"
+target_movies_path = "Dataset/ml_small/tuning/histories_gemma_recommender_target.json"
+output_dir = "Dataset/ml/ml-latest-small/tuning/gemma/gemma_50_candidates_grpo_fixed"
 output_model_path = f"{output_dir}/final_model"
 
 import re
@@ -218,12 +218,13 @@ model, tokenizer = FastLanguageModel.from_pretrained(
 )
 
 # Aggiungi LoRA al modello per un training efficiente (PEFT)
+rank = 8
 model = FastLanguageModel.get_peft_model(
     model,
-    r=32, # Rank LoRA, valori comuni sono 8, 16, 32, 64
+    r=rank, # Rank LoRA, valori comuni sono 8, 16, 32, 64
     target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
-    lora_alpha=64,
-    lora_dropout=0.1,
+    lora_alpha=rank * 2,
+    lora_dropout=0,
     bias="none",
     use_gradient_checkpointing="unsloth",
     random_state=42,
@@ -426,12 +427,13 @@ def reward_function(prompts, completions, **kwargs):
         
         # 4. CALCOLO NDCG@10: Usa le funzioni helper
         score = ndcg_at_10(relevance_scores, len(normalized_target_set))
+        hits = sum(relevance_scores)
         rewards.append(score)
         
         if score > 0:
-            print(f"✅ Hit! NDCG@10: {score:.4f}")
-        # else:
-        #     print(f"❌ Miss! NDCG@10: {score:.4f} - Generated: {ranked_list_raw}, Target: {normalized_target_set}")
+            print(f"✅ Hit! NDCG@10: {score:.4f} - Hits: {hits}")
+        else:
+            print(f"❌ Miss! NDCG@10: {score:.4f}")
     return rewards
 
 
@@ -457,28 +459,21 @@ def reward_function(prompts, completions, **kwargs):
 #     max_prompt_length=200, # Lunghezza massima del prompt
 # )
 grpo_args = GRPOConfig(
+    num_train_epochs=3,          # MODIFICATO
     temperature = 2.0,
+    top_p = 0.95,
     learning_rate = 5e-5,
     weight_decay = 0.01,
     warmup_ratio = 0.1,
     lr_scheduler_type = "linear",
     logging_steps = 1,
     per_device_train_batch_size = 1,
-    gradient_accumulation_steps = 2, # Increase to 4 for smoother training
-    num_generations = 8, # Decrease if out of memory
+    gradient_accumulation_steps = 1, # Increase to 4 for smoother training
+    num_generations = 16, # Decrease if out of memory
     max_completion_length = 500,
-    num_train_epochs=3,          # MODIFICATO
     save_strategy="epoch",       # AGGIUNTO
     report_to = "none", # Can use Weights & Biases
     output_dir = output_dir,
-    top_p = 0.95,
-
-    # For optional training + evaluation
-    # fp16_full_eval = True,
-    # per_device_eval_batch_size = 4,
-    # eval_accumulation_steps = 1,
-    # eval_strategy = "steps",
-    # eval_steps = 1,
 )
 
 # Istanzia il Trainer

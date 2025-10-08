@@ -18,14 +18,18 @@ from peft import PeftModel
 # output_report_path = "Dataset/ml/ml-latest-small/final/gemma_tuned_evaluation_results_30_candidates.json"
 
 
-FINETUNED_MODEL_PATH = "Dataset/ml/ml-latest-small/tuning/gemma/grpo_overfit_t1_fixed_replichiamo/checkpoint-605"  # <<< Il nome della cartella locale
+# FINETUNED_MODEL_PATH = "Dataset/ml/ml-latest-small/tuning/gemma/riprodotto_4/checkpoint-500"  # <<< Il nome della cartella locale
+FINETUNED_MODEL_PATH = "Dataset/ml/ml-latest-small/tuning/gemma/riprodotto_40_3/checkpoint-500"  # <<< Il nome della cartella locale
+output_report_path = "Dataset/ml/ml-latest-small/tuning/gemma/riprodotto_40_3/evaluation_results.json"
+CHECKPOINT_PATH = "Dataset/ml/ml-latest-small/tuning/gemma/riprodotto_40_3/evaluation_results.json"
+
 TEST_SET_PATH = "Dataset/ml_small/tuning/histories_gemma_recommender_train+target.json"
 TARGET_MOVIES_PATH = "Dataset/ml_small/tuning/histories_gemma_recommender_test.json"
-candidate_items_path = "Dataset/ml_small/final/candidate_items_30_eval_with_titles.csv"
+candidate_items_path = "Dataset/ml_small/final/candidate_items_40_eval_with_titles.csv"
 # output_report_path = "Dataset/ml/ml-latest-small/final/grpo_overfit_t1_checkpoint-1000_results.json"
-output_report_path = "Dataset/ml/ml-latest-small/tuning/gemma/grpo_overfit_t1_fixed_replichiamo/checkpoint-605-results.json"
-CHECKPOINT_FREQUENCY = 10  # Salva un checkpoint ogni 10 utenti
-CHECKPOINT_PATH = "Dataset/ml/ml-latest-small/tuning/gemma/grpo_overfit_t1_fixed_replichiamo/checkpoint-605-results.json"
+CHECKPOINT_FREQUENCY = 10  # Salva un checkpoint ogni 10 utenti 
+TEMPERATURE = 0.1  # Temperatura per la generazione del testo
+TOP_P = 0.95    # Top-p per la generazione del testo
 
 # --- 2. FUNZIONI HELPER (copiale dal tuo script di training) ---
 import re
@@ -253,10 +257,11 @@ for i, history_item in enumerate(tqdm(test_histories, desc="Evaluating on Test S
         with torch.inference_mode():
             outputs = model.generate(
                 **inputs,
-                max_new_tokens=400,
+                max_new_tokens=300,
                 use_cache=True,
                 do_sample=True,
-                temperature=0.1,
+                temperature=TEMPERATURE,
+                # top_p=TOP_P,
                 pad_token_id=tokenizer.pad_token_id
             )
 
@@ -279,12 +284,8 @@ for i, history_item in enumerate(tqdm(test_histories, desc="Evaluating on Test S
         recs_section = generated_text.split("**Recommended movies**:")[1]
         ranked_list_raw = re.findall(r"^\s*\d+\.\s*[\"\'\*\[]?\s*(.*?)\s*[\"\'\*\]]?\s*(?:\(|$)", recs_section, re.MULTILINE)[:10]
     except IndexError:
-        try:
-            recs_section = generated_text.split("Recommended movies:")[1]
-            ranked_list_raw = re.findall(r"^\s*\d+\.\s*[\"\'\*\[]?\s*(.*?)\s*[\"\'\*\]]?\s*(?:\(|$)", recs_section, re.MULTILINE)[:10]
-        except IndexError:
-            print(f"⚠️ Nessuna raccomandazione trovata per l'utente {generated_text}.")
-            ranked_list_raw = []
+        print(f"⚠️ Nessuna raccomandazione trovata per l'utente {generated_text}.")
+        ranked_list_raw = []
 
     if not ranked_list_raw:
         all_ndcg_scores.append(0.0)
