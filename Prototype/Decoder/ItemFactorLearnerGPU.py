@@ -87,7 +87,7 @@ class ItemFactorLearner(BaseMatrixFactorizationRecommender):
             use_gpu (bool): If True, attempts to use the GPU. Falls back to CPU if not available.
             n_jobs (int): Number of CPU cores for parallel computation (if use_gpu=False).
         """
-        self.USER_factors = user_factors
+        self.USER_factors = user_factors.copy()
         self.num_factors = user_factors.shape[1]
 
         conf_matrix = self.URM_train_csc.copy()

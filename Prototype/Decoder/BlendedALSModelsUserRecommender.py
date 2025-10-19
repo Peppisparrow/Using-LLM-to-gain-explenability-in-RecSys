@@ -94,7 +94,7 @@ class BlendedALSModelsUserRecommender(BaseMatrixFactorizationRecommender):
                        use_gpu=use_gpu,
                        **init_model_params)
 
-        self._initial_user_factors = user_factors 
+        self._initial_user_factors = user_factors.copy()
         self._learned_user_factors = ials_model.USER_factors
 
         # Cache the fixed_model_params for later use
