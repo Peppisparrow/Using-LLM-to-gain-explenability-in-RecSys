@@ -106,7 +106,7 @@ class BlendedALSModelsUserRecommender(BaseMatrixFactorizationRecommender):
         
         self._print("Fitting completed.")
 
-    def update_user_row(self, user_id, new_user_profile):
+    def update_user_row(self, user_id, new_user_profile, fit = False):
         """
         Updates the initial user factors for a single user and re-blends.
         """
@@ -119,4 +119,8 @@ class BlendedALSModelsUserRecommender(BaseMatrixFactorizationRecommender):
 
         self._initial_user_factors[user_id, :] = new_user_profile
         
-        self.set_blending_factor(self._blending_factor)
+        if fit:
+            self.set_blending_factor(self._blending_factor)
+        else:
+            blended_user_factors = self._get_blended_user_factors()
+            self.USER_factors = blended_user_factors
