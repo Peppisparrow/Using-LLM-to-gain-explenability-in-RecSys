@@ -46,7 +46,7 @@ class BlendedALSModelsUserRecommender(BaseMatrixFactorizationRecommender):
         return (self._blending_factor * learned_normalized +
                 (1 - self._blending_factor) * initial_normalized)
 
-    def set_blending_factor(self, blending_factor: float, **fit_params):
+    def set_blending_factor(self, blending_factor: float, to_fit: bool = True, **fit_params):
         """
         Sets the blending factor and re-fits the final model.
         
@@ -64,7 +64,8 @@ class BlendedALSModelsUserRecommender(BaseMatrixFactorizationRecommender):
         params_to_use = self._model_params_cache.copy()
         params_to_use.update(fit_params)
 
-        self._model.fit(user_factors=blended_user_factors, **params_to_use)
+        if to_fit:
+            self._model.fit(user_factors=blended_user_factors, **params_to_use)
 
         self.USER_factors = blended_user_factors
         self.ITEM_factors = self._model.ITEM_factors
@@ -94,7 +95,7 @@ class BlendedALSModelsUserRecommender(BaseMatrixFactorizationRecommender):
                        use_gpu=use_gpu,
                        **init_model_params)
 
-        self._initial_user_factors = user_factors.copy()
+        self._initial_user_factors = user_factors.copy() 
         self._learned_user_factors = ials_model.USER_factors
 
         # Cache the fixed_model_params for later use
@@ -106,7 +107,7 @@ class BlendedALSModelsUserRecommender(BaseMatrixFactorizationRecommender):
         
         self._print("Fitting completed.")
 
-    def update_user_row(self, user_id, new_user_profile, fit = False):
+    def update_user_row(self, user_id, new_user_profile):
         """
         Updates the initial user factors for a single user and re-blends.
         """
@@ -118,9 +119,23 @@ class BlendedALSModelsUserRecommender(BaseMatrixFactorizationRecommender):
             raise ValueError("New profile must have the same number of features as factors.")
 
         self._initial_user_factors[user_id, :] = new_user_profile
+
+        blended_user_factors = self._get_blended_user_factors()
+        self.USER_factors = blended_user_factors
+           
+    def reset_initial_user_factors(self, user_factors: np.ndarray):
+        """
+        Resets the initial user factors and re-blends.
+        """
+        if not self._fitted_flag:
+            raise ValueError("Model must be fitted before resetting initial user factors.")
+        if user_factors is None or not isinstance(user_factors, np.ndarray):
+            raise ValueError("User factors must be a valid NumPy array.")
+        if user_factors.shape != self._initial_user_factors.shape:
+            raise ValueError("New user factors must match the shape of the initial user factors.")
+
+        self._initial_user_factors = user_factors.copy()
+
+        blended_user_factors = self._get_blended_user_factors()
+        self.USER_factors = blended_user_factors
         
-        if fit:
-            self.set_blending_factor(self._blending_factor)
-        else:
-            blended_user_factors = self._get_blended_user_factors()
-            self.USER_factors = blended_user_factors
